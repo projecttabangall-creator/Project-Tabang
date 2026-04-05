@@ -12,6 +12,10 @@ import { paymentRouter } from "./routes/payment.routes";
 import { disputeRouter } from "./routes/dispute.routes";
 import { adminRouter } from "./routes/admin.routes";
 
+// Import triggers
+import { onRequestCreated } from "./triggers/onRequestCreated";
+import { onRequestUpdated } from "./triggers/onRequestUpdated";
+
 const app = express();
 
 // Middleware
@@ -36,7 +40,5 @@ app.use("/api/admin", adminRouter);
 // Export as Firebase Cloud Function
 export const api = functions.https.onRequest(app);
 
-// Export Firestore triggers (will be added in Phase 3)
-// export { onRequestCreated } from "./triggers/onRequestCreated";
-// export { onRequestUpdated } from "./triggers/onRequestUpdated";
-// export { onDisputeCreated } from "./triggers/onDisputeCreated";
+// Export Firestore triggers
+export { onRequestCreated, onRequestUpdated };

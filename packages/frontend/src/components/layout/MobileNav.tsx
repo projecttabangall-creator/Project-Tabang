@@ -43,7 +43,7 @@ function getNavItems(role: string) {
   switch (role) {
     case "resident":
       return [
-        { to: "/resident/request", icon: ClipboardList, label: "Request" },
+        { to: "/resident/request/new", icon: ClipboardList, label: "Request" },
         { to: "/resident/requests", icon: Home, label: "My Jobs" },
         { to: "/resident/notifications", icon: Bell, label: "Alerts" },
         { to: "/resident/profile", icon: User, label: "Profile" },

@@ -10,6 +10,7 @@ export const createRequestSchema = z.object({
     longitude: z.number().min(-180).max(180),
   }),
   locationAddress: z.string().optional(),
+  photoUrls: z.array(z.string()).optional().default([]),
   schedule: z.object({
     date: z.string().min(1, "Date is required"),
     startTime: z.string().regex(/^\d{2}:\d{2}$/, "Invalid time format"),
@@ -34,6 +35,8 @@ export const cancelRequestSchema = z.object({
   reason: z.string().optional(),
 });
 
-export type CreateRequestInput = z.infer<typeof createRequestSchema>;
+export type CreateRequestInput = z.infer<typeof createRequestSchema> & {
+  photoUrls?: string[];
+};
 export type SetFinalPriceInput = z.infer<typeof setFinalPriceSchema>;
 export type RateWorkerInput = z.infer<typeof rateWorkerSchema>;

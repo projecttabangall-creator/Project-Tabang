@@ -11,10 +11,13 @@ import { OTPVerification } from "@/pages/auth/OTPVerification";
 
 // Resident pages
 import { MyRequests } from "@/pages/resident/MyRequests";
+import { RequestService } from "@/pages/resident/RequestService";
+import { RequestDetail } from "@/pages/resident/RequestDetail";
 import { ResidentProfile } from "@/pages/resident/Profile";
 
 // Worker pages
 import { WorkerHome } from "@/pages/worker/Home";
+import { JobDetail } from "@/pages/worker/JobDetail";
 import { WorkerProfile } from "@/pages/worker/Profile";
 
 // Admin pages
@@ -70,6 +73,8 @@ export default function App() {
           <Route element={<ProtectedRoute allowedRoles={["resident"]} />}>
             <Route element={<AppLayout />}>
               <Route path="/resident/requests" element={<MyRequests />} />
+              <Route path="/resident/request/new" element={<RequestService />} />
+              <Route path="/resident/request/:requestId" element={<RequestDetail />} />
               <Route path="/resident/notifications" element={<Notifications />} />
               <Route path="/resident/profile" element={<ResidentProfile />} />
             </Route>
@@ -79,6 +84,7 @@ export default function App() {
           <Route element={<ProtectedRoute allowedRoles={["worker"]} />}>
             <Route element={<AppLayout />}>
               <Route path="/worker/home" element={<WorkerHome />} />
+              <Route path="/worker/job/:jobId" element={<JobDetail />} />
               <Route path="/worker/notifications" element={<Notifications />} />
               <Route path="/worker/profile" element={<WorkerProfile />} />
             </Route>
