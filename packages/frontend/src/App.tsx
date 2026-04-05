@@ -29,9 +29,13 @@ import { DataEntry } from "@/pages/admin/DataEntry";
 import { WorkerRegistration } from "@/pages/admin/WorkerRegistration";
 import { WorkerList } from "@/pages/admin/WorkerList";
 import { UserManagement } from "@/pages/admin/UserManagement";
+import { PaymentReview } from "@/pages/admin/PaymentReview";
+import { DisputeReview } from "@/pages/admin/DisputeReview";
 
 // Shared pages
 import { Notifications } from "@/pages/Notifications";
+import { SubmitPayment } from "@/pages/resident/SubmitPayment";
+import { FileDispute } from "@/pages/shared/FileDispute";
 
 function RoleRedirect() {
   const { userProfile, loading } = useAuth();
@@ -78,6 +82,8 @@ export default function App() {
               <Route path="/resident/requests" element={<MyRequests />} />
               <Route path="/resident/request/new" element={<RequestService />} />
               <Route path="/resident/request/:requestId" element={<RequestDetail />} />
+              <Route path="/resident/request/:requestId/pay" element={<SubmitPayment />} />
+              <Route path="/resident/request/:requestId/dispute" element={<FileDispute />} />
               <Route path="/resident/notifications" element={<Notifications />} />
               <Route path="/resident/profile" element={<ResidentProfile />} />
             </Route>
@@ -88,6 +94,7 @@ export default function App() {
             <Route element={<AppLayout />}>
               <Route path="/worker/home" element={<WorkerHome />} />
               <Route path="/worker/job/:jobId" element={<JobDetail />} />
+              <Route path="/worker/job/:requestId/dispute" element={<FileDispute />} />
               <Route path="/worker/notifications" element={<Notifications />} />
               <Route path="/worker/profile" element={<WorkerProfile />} />
             </Route>
@@ -101,6 +108,8 @@ export default function App() {
               <Route path="/admin/workers/register" element={<WorkerRegistration />} />
               <Route path="/admin/workers" element={<WorkerList />} />
               <Route path="/admin/users" element={<UserManagement />} />
+              <Route path="/admin/payments" element={<PaymentReview />} />
+              <Route path="/admin/disputes" element={<DisputeReview />} />
               <Route path="/admin/notifications" element={<Notifications />} />
             </Route>
           </Route>

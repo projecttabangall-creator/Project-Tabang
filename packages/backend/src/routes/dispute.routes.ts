@@ -1,6 +1,14 @@
 import { Router } from "express";
 import { verifyToken } from "../middleware/auth";
 import { roleGuard } from "../middleware/roleGuard";
+import { validate } from "../middleware/validate";
+import { fileDisputeSchema, resolveDisputeSchema } from "@tabang/shared";
+import {
+  fileDispute,
+  listDisputes,
+  getDispute,
+  resolveDispute,
+} from "../controllers/dispute.controller";
 
 export const disputeRouter = Router();
 
@@ -10,22 +18,20 @@ disputeRouter.use(verifyToken);
 disputeRouter.post(
   "/",
   roleGuard("resident", "worker"),
-  async (_req, res) => {
-    res.status(501).json({ message: "Coming in Phase 4" });
-  }
+  validate(fileDisputeSchema),
+  fileDispute
 );
 
 // GET /api/disputes — list all disputes (admin)
-disputeRouter.get("/", roleGuard("admin"), async (_req, res) => {
-  res.status(501).json({ message: "Coming in Phase 4" });
-});
+disputeRouter.get("/", roleGuard("admin"), listDisputes);
 
 // GET /api/disputes/:id — get dispute detail
-disputeRouter.get("/:id", async (_req, res) => {
-  res.status(501).json({ message: "Coming in Phase 4" });
-});
+disputeRouter.get("/:id", getDispute);
 
 // PATCH /api/disputes/:id/resolve — resolve dispute (admin)
-disputeRouter.patch("/:id/resolve", roleGuard("admin"), async (_req, res) => {
-  res.status(501).json({ message: "Coming in Phase 4" });
-});
+disputeRouter.patch(
+  "/:id/resolve",
+  roleGuard("admin"),
+  validate(resolveDisputeSchema),
+  resolveDispute
+);

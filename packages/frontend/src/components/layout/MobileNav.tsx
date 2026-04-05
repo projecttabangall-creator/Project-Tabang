@@ -7,7 +7,7 @@ import {
   LayoutDashboard,
   Users,
   CreditCard,
-  Settings,
+  AlertTriangle,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -56,11 +56,11 @@ function getNavItems(role: string) {
       ];
     case "admin":
       return [
-        { to: "/admin/dashboard", icon: LayoutDashboard, label: "Dashboard" },
-        { to: "/admin/requests", icon: ClipboardList, label: "Requests" },
+        { to: "/admin/dashboard", icon: LayoutDashboard, label: "Home" },
         { to: "/admin/payments", icon: CreditCard, label: "Payments" },
+        { to: "/admin/disputes", icon: AlertTriangle, label: "Disputes" },
         { to: "/admin/users", icon: Users, label: "Users" },
-        { to: "/admin/data-entry", icon: Settings, label: "Config" },
+        { to: "/admin/data-entry", icon: ClipboardList, label: "Config" },
       ];
     default:
       return [];

@@ -15,3 +15,4 @@ export * from "./constants/config";
 export * from "./validation/auth";
 export * from "./validation/request";
 export * from "./validation/category";
+export * from "./validation/payment";

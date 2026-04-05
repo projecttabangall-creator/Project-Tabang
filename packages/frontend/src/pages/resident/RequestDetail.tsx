@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import { toast } from "sonner";
 import {
   MapPin,
@@ -9,6 +9,8 @@ import {
   Star,
   Trash2,
   MessageCircle,
+  CreditCard,
+  AlertTriangle,
 } from "lucide-react";
 import { MapContainer, TileLayer, Marker } from "react-leaflet";
 import api from "@/services/api";
@@ -354,6 +356,28 @@ export function RequestDetail() {
             ))}
           </div>
         </div>
+      )}
+
+      {/* Submit Payment Button */}
+      {request.status === "completed" && (
+        <Link
+          to={`/resident/request/${requestId}/pay`}
+          className="w-full py-3 btn-primary flex items-center justify-center gap-2"
+        >
+          <CreditCard size={18} />
+          Submit Payment Proof
+        </Link>
+      )}
+
+      {/* File Dispute Button */}
+      {["worker_arrived", "price_confirmed", "in_progress", "completed", "payment_submitted", "payment_confirmed"].includes(request.status) && (
+        <Link
+          to={`/resident/request/${requestId}/dispute`}
+          className="w-full py-3 bg-yellow-50 hover:bg-yellow-100 text-yellow-700 font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
+        >
+          <AlertTriangle size={18} />
+          File a Dispute
+        </Link>
       )}
 
       {/* Action Buttons */}
