@@ -1,0 +1,422 @@
+================================================================
+PROJECT TABANG - PRODUCT REQUIREMENT DOCUMENT
+================================================================
+
+OVERVIEW
+--------
+TABANG is a community-driven platform for coordinating assistance
+services (emergency response, local aid, workforce deployment).
+It connects residents in need with verified skilled workers,
+managed by Barangay admin, using real-time tracking,
+auto-assignment, and transparent payment flows.
+
+
+================================================================
+1. CORE WORKFLOW
+================================================================
+
+1A. RESIDENT SUBMITS REQUEST
+  Fields:
+  - Name, Contact No. (auto-filled from account if available)
+  - Service Category (dropdown)
+      Initial 5: Carpentry, Plumbing, Electrician, Masonry, Appliance Repair
+      Admin can add more categories
+  - Specific Item (each category has 3 initial items with admin-set min prices)
+  - Problem Description (paragraph)
+  - Suggested Price (must be >= admin minimum)
+  - Photos (upload or take picture)
+  - Location (Leaflet map — resident can pin manually OR use current location;
+      default area: Banilad, Cebu City)
+  - Preferred Schedule (Date, Start Time, End Time)
+  - Payment Method (GCash or Cash)
+
+1B. AUTO-ASSIGNMENT
+  System automatically selects best worker.
+  See Section 5 for full algorithm.
+
+1C. WORKER NOTIFICATION & INITIAL ACCEPTANCE
+  - Worker receives SMS / push notification / email containing:
+      Category, Photo, Description, Resident Name, Schedule, Suggested Price
+  - ACCEPT → full details revealed: contact no., location, price breakdown
+      → Resident notified of acceptance
+      → Map with nearest route shown to worker
+  - REJECT → request re-queued for reassignment
+
+1D. WORKER ARRIVES
+  - Worker taps "Worker Has Arrived" button
+  - Resident is notified
+
+1E. FINAL ACCEPTANCE (ON-SITE)
+  - Worker and Resident agree on final price on-site
+  - System displays popup to worker:
+      · Final price entered
+      · Barangay % deduction (admin-configurable)
+      · Net amount worker will receive
+  - Worker confirmation panel asks worker to affirm that the time,
+    skill, price, and resources are acceptable and within their capacity
+  - Worker must confirm before proceeding
+  - Status updated for Resident, Worker, and Admin
+
+  REPORT BUTTON (active while status = In-Progress):
+  - Either party can report the other with a required reason
+  - Admin is notified and can:
+      · Deduct credit points
+      · Suspend account
+      · Ban account
+      · File an incident report
+
+1F. JOB COMPLETION & PAYMENT
+  - Worker uploads proof-of-work photo
+  - Resident submits proof of payment to Barangay account
+      (GCash screenshot OR cash receipt photo)
+  - Admin reviews and confirms payment → transaction closed
+  - Resident rates the worker
+
+
+================================================================
+2. USER INTERFACES
+================================================================
+
+2A. RESIDENT PAGES
+  - Request Service
+  - My Requests (tabs: Active / Recent / History) — shows request status
+  - Notifications
+  - Profile:
+      · Profile photo
+      · Verified status (via OTP)
+      · Name (locked after verification)
+      · Email (optional)
+      · Contact Number (required)
+      · Credit Points
+
+2B. SKILLED WORKER PAGES
+  - Home:
+      · Average Rating
+      · Pending / Ongoing Requests
+      · Availability toggle button
+  - Notifications (click → redirects to relevant page)
+  - Profile:
+      · Profile photo
+      · Average Rating
+      · No. of Completed Jobs
+      · Credit Points
+      · Availability Schedule (days and time ranges)
+      · Name (required)
+      · Email (optional)
+      · Phone Number (required)
+      · Uploaded Credentials (PSA, NBI Clearance, NC2 Certificates, etc.)
+      · Verified Status
+      · Work Category
+
+2C. ADMIN / BARANGAY PAGES
+  - Home Dashboard:
+      · Total Resident Users
+      · Total Workers
+      · Pending Worker Verifications
+      · Active Requests
+      · Completed Jobs
+      · Pending Payments
+      · System Alerts (reports on residents/workers)
+      · Project Income (daily / weekly / monthly)
+
+  - Worker Registration Page:
+      · Fields: Last Name, First Name, Middle Initial, Birthday,
+        Primary Specialization, Contact No., Email (optional),
+        Barangay Address, Credentials (PSA/NBI/NC2 etc.)
+      · Biometric enrollment (fingerprint via Raspberry Pi)
+      · Credential upload and review
+      · Verification and activation
+      · Acceptance of Terms and Conditions
+
+  - Worker Register (list view, sortable by):
+      Category, Status, Rating, Credit Points, Jobs,
+      Reports, Acceptance Rate, Cancellation Rate
+
+  - Request Page (list view with):
+      Status, Category, Assigned Worker, Price, Cancelled flag
+
+  - Payment Page:
+      · Proof of payment viewer
+      · List of requests with pending payments
+
+  - User Management Page:
+      · List of Workers
+      · List of Residents
+
+  - Data Entry Page:
+      · Add / edit Categories
+      · Add / edit Specific Items per category
+      · Set minimum prices per item
+      · Upload sample/reference photos per item
+      · Special "Free" flag per item (for calamity/bayanihan use cases)
+
+  - Special Request Page:
+      · For Senior Citizens, PWDs, and those without system access
+      · Barangay worker fills in the request on their behalf
+      · Same form fields as Resident Request Service page
+
+  - Service Page:
+      · Service table and Price table with timestamps
+
+  - System Logs Page
+
+
+================================================================
+3. PRICING & PAYMENT RULES
+================================================================
+
+3A. COMMISSION
+  - Always 10% of the worker's final price
+  - Paid BY the resident ON TOP of the worker's price
+  - Worker never loses money from commission
+  - Resident sees commission at 2 points:
+      (1) when posting the job
+      (2) when approving the final price
+
+3B. CANCELLATION PENALTIES
+  - Cancel before worker accepts       → NO penalty
+  - Cancel after accept, before arrive → NO penalty
+  - Cancel after worker arrives        → 20% of initial price
+      (paid to the worker, not the Barangay)
+
+3C. PRICING STAGES
+  - Phase 1: Admin sets minimum price per specific service item
+  - Phase 2: Resident suggests price (must be >= minimum)
+  - Phase 3: Worker sets final price on-site
+      · Must be >= admin minimum
+      · Cannot exceed 2x initial price without admin approval
+      · If price changes, worker must provide explanation
+
+3D. PAYMENT CHANNELS
+  - GCash or Cash (selected by resident at request submission)
+  - GCash: resident submits screenshot as proof
+  - Cash: resident submits photo of receipt as proof
+  - Admin reviews and confirms proof before closing transaction
+  - Barangay % share is set and adjustable by Admin
+
+
+================================================================
+4. DISPUTE RESOLUTION WORKFLOW
+================================================================
+
+4A. TRIGGER
+  "Raise Dispute" button available when:
+  - Status = In-Progress, OR
+  - Status = Completed (within 24 hours of completion only)
+
+4B. SUBMISSION FORM
+  Required fields:
+  - Dispute Type (dropdown):
+      Work Quality Issue | Payment Issue | No Show |
+      Behavior/Safety Concern | Other
+  - Description (paragraph)
+  - Evidence:
+      · Photos (required if applicable)
+      · Optional screenshots or supporting files
+
+  On submit:
+  - Status → "Under Dispute"
+  - Ratings temporarily disabled
+  - Payment processing paused
+  - Both accounts flagged
+  - Notifications sent to: Resident, Worker, and Admin
+
+4C. ADMIN REVIEW PANEL
+  Displays:
+  - Dispute Summary
+  - Request Timeline
+  - Uploaded Evidence
+  - Worker Profile (rating, jobs, past disputes)
+  - Resident Profile (history, past disputes)
+
+4D. RESOLUTION OUTCOMES (Admin selects one)
+  - Favor Resident   → payment cancelled/refunded; worker credit deducted;
+                        optional warning / suspension / ban
+  - Favor Worker     → payment approved; resident credit deducted
+  - Partial          → adjust final price; mark completed with modification
+  - Escalate         → filed as Incident Report; further investigation;
+                        possible suspension or ban
+
+4E. CREDIT POINT RULES
+  - Worker at fault  → -2 to Worker
+  - Resident at fault → -2 to Resident
+  - Both at fault    → -1 each
+  - False report     → -2 to reporting user
+  - Credit = 3       → Flagged
+  - Credit <= 2      → Suspension or Ban
+  - Max credit = 5, Min = 1
+
+4F. TIME CONSTRAINTS & SYSTEM RULES
+  - Dispute must be filed within 24 hrs of job completion
+  - Admin must resolve within 48–72 hrs
+  - If one party does not respond → decision proceeds with available evidence
+  - If admin does not act → case auto-escalates
+  - Limit on number of disputes per user per time period
+  - High dispute rate accounts → auto-flagged for review
+  - Repeated false reports → additional credit deductions
+
+4G. FINALIZATION
+  - Job status updated to: Completed / Cancelled / Adjusted
+  - Payment status finalized
+  - Rating feature re-enabled (optional)
+  - Case recorded in System Logs Page
+
+
+================================================================
+5. AUTO-ASSIGNMENT ALGORITHM
+================================================================
+
+Priority order: Fairness (1st) → Quality (2nd) → Speed (3rd)
+
+STAGE 1 — HARD FILTERS (worker excluded if any fails)
+  - Category Match: worker specialization must match request category
+  - Availability Match: worker schedule must cover requested date/time
+  - Credit Standing: credit points must be >= 3
+  - Account Status: must be active and verified
+
+STAGE 2 — SCORING (all scores normalized to 0.0–1.0)
+  - Frequency Score  (weight: 50%)
+      = 1 - (worker's completed jobs / highest jobs in pool)
+      Worker with 0 jobs = score of 1.0
+
+  - Rating Score     (weight: 35%)
+      = worker's average rating / 5.0
+      No ratings yet = default score of 0.6
+
+  - Location Score   (weight: 15%)
+      = 1 - (worker's distance / farthest distance in pool)
+      Uses Haversine formula on lat/lng coordinates
+      Nearest worker scores closest to 1.0
+
+  FINAL SCORE = (Frequency × 0.50) + (Rating × 0.35) + (Location × 0.15)
+  → Highest score is assigned the request
+
+STAGE 3 — TIEBREAKER
+  If two or more workers share the same Final Score:
+  → Assign to worker with the oldest last-assignment timestamp
+
+EDGE CASES
+  - Only 1 worker passes filters → assign directly, no scoring needed
+  - 0 workers pass filters       → place in pending queue;
+                                    notify Admin and Resident of delay
+  - All workers equidistant      → all get Location Score = 1.0
+                                    (location removed as differentiator)
+
+REQUIRED WORKER DATA FIELDS (must be maintained per worker record)
+  - Completed jobs count
+  - Average rating
+  - Last assigned timestamp
+  - Credit points
+  - Verified and active status
+  - Availability schedule (days and time ranges)
+  - GPS coordinates (latitude and longitude)
+
+
+================================================================
+6. RASPBERRY PI 4B INTEGRATION
+================================================================
+
+Device installed at the Barangay office.
+Hosts a local DB that mirrors the cloud database.
+Enables Admin to operate during internet outages.
+
+OFFLINE CAPABILITIES
+  Available offline:
+  - Register new Skilled Worker (details, credentials, biometric enrollment)
+  - Read/navigate Admin dashboard (uses local DB snapshot)
+
+  Unavailable offline (queued or disabled until reconnected):
+  - Payment confirmation
+  - Responding to live reports
+  - Triggering worker assignments
+
+BIOMETRIC INTEGRATION
+  - Fingerprint sensor connected to Raspberry Pi
+  - Enrollment done physically at Barangay office
+  - Biometric data synced to cloud upon reconnection
+
+SYNC BEHAVIOR
+  - Auto-sync: triggers automatically when internet is restored
+  - Manual sync: Admin can trigger sync anytime via dashboard button
+  - Conflict resolution: local (Admin) version takes precedence
+  - All conflicts and resolutions logged in System Logs
+
+OFFLINE UI INDICATORS
+  - Visible offline mode banner on Admin dashboard
+  - Disabled state + message shown for actions requiring internet
+  - Confirmation notification shown after successful sync
+
+
+================================================================
+7. AUTHENTICATION & ACCOUNT MANAGEMENT
+================================================================
+
+7A. RESIDENT
+  Registration (self-service):
+  - Full Name, Birthday, Barangay Address
+    (Street, House/Lot No., Block No.)
+  - Contact Number (required)
+  - Password (minimum 8 characters)
+
+  Verification:
+  - OTP sent to registered contact number
+  - On success: account activated, name locked, default credit points assigned
+
+  Login: Contact Number + Password
+  Password Reset: OTP via registered contact number
+
+7B. SKILLED WORKER
+  Registration (Admin only — workers cannot self-register):
+  - Last Name, First Name, Middle Initial
+  - Birthday
+  - Primary Specialization
+  - Contact Number (required)
+  - Email Address (optional)
+  - Barangay Address (Street, House/Lot No., Block No.)
+  - Credentials (PSA, NBI Clearance, NC2, etc.)
+  - Biometric enrollment via Raspberry Pi fingerprint sensor
+
+  - Admin reviews, verifies, and activates account
+  - Worker cannot log in until fully verified and activated
+
+  Login: Contact Number + Password (set during registration)
+
+7C. ADMIN / BARANGAY
+  - Accounts created manually (not publicly accessible)
+  Login: Registered Contact Number or Email + Password
+  Full access to: worker registration, user management,
+  dispute resolution, payment confirmation, system config & logs
+
+7D. GENERAL SECURITY RULES
+  - OTP required for registration and password reset
+  - Passwords stored as encrypted hashes
+  - Account temporarily locked after multiple failed login attempts
+  - Session timeout after inactivity
+  - Account status validated on every login (Active / Suspended / Banned)
+  - All accounts linked to: Service Requests, Payments,
+    Disputes, and Credit Points
+
+
+================================================================
+8. KEY CONSIDERATIONS
+================================================================
+
+  1. Admin must complete Data Entry (categories, items, min prices)
+     before any resident can submit a service request.
+
+  2. Auto-assignment follows the scoring algorithm in Section 5.
+
+  3. Credit Points scale: 5 = highest, 1 = lowest.
+     All deduction, flagging, and suspension rules are in Section 4.
+
+  4. Map API: Leaflet recommended (free/open-source).
+     Default map center: Banilad, Cebu City.
+
+  5. UI/UX must follow mobile-first design for all user roles.
+
+  6. Raspberry Pi 4B handles offline mode and biometric enrollment.
+     Full spec in Section 6.
+
+================================================================
+END OF DOCUMENT
+================================================================

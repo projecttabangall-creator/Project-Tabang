@@ -1,0 +1,97 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper: Check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Helper: Check user role from custom claims
+    function hasRole(role) {
+      return isAuthenticated() && request.auth.token.role == role;
+    }
+
+    // Helper: Check if user is the document owner
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Users collection
+    match /users/{userId} {
+      allow read: if isAuthenticated() && (isOwner(userId) || hasRole('admin'));
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && (isOwner(userId) || hasRole('admin'));
+      allow delete: if hasRole('admin');
+    }
+
+    // Categories collection
+    match /categories/{categoryId} {
+      allow read: if isAuthenticated();
+      allow write: if hasRole('admin');
+
+      // Category items subcollection
+      match /items/{itemId} {
+        allow read: if isAuthenticated();
+        allow write: if hasRole('admin');
+      }
+    }
+
+    // Service requests collection
+    match /serviceRequests/{requestId} {
+      allow read: if isAuthenticated() && (
+        resource.data.residentId == request.auth.uid ||
+        resource.data.assignedWorkerId == request.auth.uid ||
+        hasRole('admin')
+      );
+      allow create: if isAuthenticated() && (hasRole('resident') || hasRole('admin'));
+      allow update: if isAuthenticated(); // Fine-grained control in backend API
+      allow delete: if false; // Never delete requests
+    }
+
+    // Disputes collection
+    match /disputes/{disputeId} {
+      allow read: if isAuthenticated() && (
+        resource.data.filedBy == request.auth.uid ||
+        resource.data.filedAgainst == request.auth.uid ||
+        hasRole('admin')
+      );
+      allow create: if isAuthenticated();
+      allow update: if hasRole('admin');
+      allow delete: if false;
+    }
+
+    // Payments collection
+    match /payments/{paymentId} {
+      allow read: if isAuthenticated() && (
+        resource.data.residentId == request.auth.uid ||
+        resource.data.workerId == request.auth.uid ||
+        hasRole('admin')
+      );
+      allow create: if isAuthenticated();
+      allow update: if hasRole('admin');
+      allow delete: if false;
+    }
+
+    // Notifications collection
+    match /notifications/{notificationId} {
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow create: if false; // Only created by backend
+      allow delete: if false;
+    }
+
+    // System config — admin only
+    match /systemConfig/{configId} {
+      allow read: if isAuthenticated();
+      allow write: if hasRole('admin');
+    }
+
+    // System logs — admin read only, backend writes
+    match /systemLogs/{logId} {
+      allow read: if hasRole('admin');
+      allow write: if false; // Only backend writes logs
+    }
+  }
+}
