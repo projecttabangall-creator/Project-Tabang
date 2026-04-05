@@ -9,6 +9,9 @@ import { Login } from "@/pages/auth/Login";
 import { Register } from "@/pages/auth/Register";
 import { OTPVerification } from "@/pages/auth/OTPVerification";
 
+// Public pages
+import { Landing } from "@/pages/Landing";
+
 // Resident pages
 import { MyRequests } from "@/pages/resident/MyRequests";
 import { RequestService } from "@/pages/resident/RequestService";
@@ -41,7 +44,7 @@ function RoleRedirect() {
     );
   }
 
-  if (!userProfile) return <Navigate to="/login" replace />;
+  if (!userProfile) return <Landing />;
 
   switch (userProfile.role) {
     case "resident":
