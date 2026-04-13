@@ -8,6 +8,7 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { Login } from "@/pages/auth/Login";
 import { Register } from "@/pages/auth/Register";
 import { OTPVerification } from "@/pages/auth/OTPVerification";
+import { ForgotPassword } from "@/pages/auth/ForgotPassword";
 
 // Public pages
 import { Landing } from "@/pages/Landing";
@@ -28,9 +29,16 @@ import { AdminDashboard } from "@/pages/admin/Dashboard";
 import { DataEntry } from "@/pages/admin/DataEntry";
 import { WorkerRegistration } from "@/pages/admin/WorkerRegistration";
 import { WorkerList } from "@/pages/admin/WorkerList";
+import { WorkerDetail } from "@/pages/admin/WorkerDetail";
 import { UserManagement } from "@/pages/admin/UserManagement";
 import { PaymentReview } from "@/pages/admin/PaymentReview";
 import { DisputeReview } from "@/pages/admin/DisputeReview";
+import { RequestManagement } from "@/pages/admin/RequestManagement";
+import { AdminRequestDetail } from "@/pages/admin/RequestDetail";
+import { SpecialRequest } from "@/pages/admin/SpecialRequest";
+import { Services } from "@/pages/admin/Services";
+import { SystemLogs } from "@/pages/admin/SystemLogs";
+import { Income } from "@/pages/admin/Income";
 
 // Shared pages
 import { Notifications } from "@/pages/Notifications";
@@ -72,6 +80,7 @@ export default function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/verify-otp" element={<OTPVerification />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
 
           {/* Root redirect based on role */}
           <Route path="/" element={<RoleRedirect />} />
@@ -107,9 +116,16 @@ export default function App() {
               <Route path="/admin/data-entry" element={<DataEntry />} />
               <Route path="/admin/workers/register" element={<WorkerRegistration />} />
               <Route path="/admin/workers" element={<WorkerList />} />
+              <Route path="/admin/workers/:workerId" element={<WorkerDetail />} />
               <Route path="/admin/users" element={<UserManagement />} />
               <Route path="/admin/payments" element={<PaymentReview />} />
+              <Route path="/admin/income" element={<Income />} />
               <Route path="/admin/disputes" element={<DisputeReview />} />
+              <Route path="/admin/requests" element={<RequestManagement />} />
+              <Route path="/admin/requests/:requestId" element={<AdminRequestDetail />} />
+              <Route path="/admin/special-request" element={<SpecialRequest />} />
+              <Route path="/admin/services" element={<Services />} />
+              <Route path="/admin/logs" element={<SystemLogs />} />
               <Route path="/admin/notifications" element={<Notifications />} />
             </Route>
           </Route>

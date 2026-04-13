@@ -1,6 +1,8 @@
 import { onDocumentUpdated } from "firebase-functions/v2/firestore";
 import { db } from "../config/firebase";
 import { logger } from "firebase-functions";
+import { REQUEST_STATUSES } from "@tabang/shared";
+import { attemptRequestAssignment } from "../services/requestAssignment.service";
 
 interface Request {
   id?: string;
@@ -23,13 +25,23 @@ export const onRequestUpdated = onDocumentUpdated(
 
     const statusChanged = before.status !== after.status;
 
+    try {
+
+    if (
+      statusChanged &&
+      after.status === REQUEST_STATUSES.PENDING &&
+      !after.assignedWorkerId
+    ) {
+      const result = await attemptRequestAssignment(requestId, after);
+      logger.info(`Reassignment result for request ${requestId}: ${result}`);
+    }
+
     if (!statusChanged) {
-      return; // Only handle status changes
+      return; // Only handle status changes after non-status assignment updates
     }
 
     logger.info(`Request ${requestId} status changed: ${before.status} → ${after.status}`);
 
-    try {
       // Send notifications based on status transitions
       const notifications: Array<{ userId: string; title: string; body: string; type: string }> = [];
 
@@ -39,7 +51,7 @@ export const onRequestUpdated = onDocumentUpdated(
           if (after.assignedWorkerId) {
             notifications.push({
               userId: after.assignedWorkerId,
-              type: "job_assigned",
+              type: "assignment",
               title: "New Job Assignment",
               body: "You've been assigned a new service request",
             });
@@ -50,7 +62,7 @@ export const onRequestUpdated = onDocumentUpdated(
           // Notify resident that worker accepted
           notifications.push({
             userId: after.residentId,
-            type: "job_accepted",
+            type: "acceptance",
             title: "Job Accepted",
             body: "Your assigned worker has accepted the job",
           });
@@ -60,7 +72,7 @@ export const onRequestUpdated = onDocumentUpdated(
           // Notify resident that worker has arrived
           notifications.push({
             userId: after.residentId,
-            type: "worker_arrived",
+            type: "arrival",
             title: "Worker Arrived",
             body: "Your worker has arrived at the location",
           });
@@ -70,7 +82,7 @@ export const onRequestUpdated = onDocumentUpdated(
           // Notify resident about final price
           notifications.push({
             userId: after.residentId,
-            type: "price_confirmed",
+            type: "system",
             title: "Price Confirmed",
             body: "Worker has set the final price. Please review.",
           });
@@ -80,7 +92,7 @@ export const onRequestUpdated = onDocumentUpdated(
           // Notify resident that work is in progress
           notifications.push({
             userId: after.residentId,
-            type: "work_started",
+            type: "system",
             title: "Work In Progress",
             body: "The worker is now performing the service",
           });
@@ -90,7 +102,7 @@ export const onRequestUpdated = onDocumentUpdated(
           // Notify resident that work is complete
           notifications.push({
             userId: after.residentId,
-            type: "work_completed",
+            type: "system",
             title: "Work Completed",
             body: "The worker has completed the service. Please submit payment.",
           });
@@ -99,7 +111,7 @@ export const onRequestUpdated = onDocumentUpdated(
           if (after.assignedWorkerId) {
             notifications.push({
               userId: after.assignedWorkerId,
-              type: "work_completed",
+              type: "system",
               title: "Work Completed",
               body: "Awaiting payment submission from resident",
             });
@@ -110,7 +122,7 @@ export const onRequestUpdated = onDocumentUpdated(
           // Notify both parties about cancellation
           notifications.push({
             userId: after.residentId,
-            type: "job_cancelled",
+            type: "system",
             title: "Job Cancelled",
             body: "Your service request has been cancelled",
           });
@@ -118,7 +130,7 @@ export const onRequestUpdated = onDocumentUpdated(
           if (after.assignedWorkerId) {
             notifications.push({
               userId: after.assignedWorkerId,
-              type: "job_cancelled",
+              type: "system",
               title: "Job Cancelled",
               body: "Your assigned job has been cancelled",
             });
@@ -133,7 +145,7 @@ export const onRequestUpdated = onDocumentUpdated(
           type: notif.type,
           title: notif.title,
           body: notif.body,
-          referenceType: "serviceRequest",
+          referenceType: "request",
           referenceId: requestId,
           isRead: false,
           createdAt: new Date(),

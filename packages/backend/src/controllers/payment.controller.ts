@@ -1,12 +1,13 @@
 import { Response } from "express";
 import { AuthenticatedRequest } from "../middleware/auth";
 import { db } from "../config/firebase";
-import admin from "../config/firebase";
+import { FieldValue } from "firebase-admin/firestore";
+import { PAYMENT_STATUSES, REQUEST_STATUSES } from "@tabang/shared";
 import {
-  REQUEST_STATUSES,
-  PAYMENT_STATUSES,
-  DEFAULT_COMMISSION_PERCENT,
-} from "@tabang/shared";
+  calculateCommission,
+  calculateTotalForResident,
+  getCommissionPercent,
+} from "../services/pricing.service";
 
 interface SubmitPaymentBody {
   requestId: string;
@@ -28,7 +29,6 @@ export async function submitPayment(
   const body = req.body as SubmitPaymentBody;
 
   try {
-    // Get the request
     const requestDoc = await requestsRef.doc(body.requestId).get();
     if (!requestDoc.exists) {
       res.status(404).json({ error: "Request not found" });
@@ -47,7 +47,6 @@ export async function submitPayment(
       return;
     }
 
-    // Check no duplicate payment
     const existing = await paymentsRef
       .where("requestId", "==", body.requestId)
       .where("status", "!=", PAYMENT_STATUSES.REJECTED)
@@ -59,15 +58,26 @@ export async function submitPayment(
       return;
     }
 
-    const finalPrice = requestData.finalPrice || requestData.suggestedPrice;
-    const commissionAmount = Math.round(
-      finalPrice * (DEFAULT_COMMISSION_PERCENT / 100)
-    );
-    const totalAmount = finalPrice + commissionAmount;
-    const barangaySharePercent = 100; // all commission goes to barangay
+    const commissionPercent =
+      typeof requestData.commissionPercent === "number"
+        ? requestData.commissionPercent
+        : await getCommissionPercent();
+    const finalPrice =
+      typeof requestData.finalPrice === "number"
+        ? requestData.finalPrice
+        : requestData.suggestedPrice;
+    const commissionAmount =
+      typeof requestData.commission === "number"
+        ? requestData.commission
+        : calculateCommission(finalPrice, commissionPercent);
+    const totalAmount =
+      typeof requestData.totalForResident === "number"
+        ? requestData.totalForResident
+        : calculateTotalForResident(finalPrice, commissionPercent);
+    const barangaySharePercent = commissionPercent;
     const barangayShareAmount = commissionAmount;
 
-    const now = admin.firestore.FieldValue.serverTimestamp();
+    const now = FieldValue.serverTimestamp();
 
     const paymentRef = await paymentsRef.add({
       requestId: body.requestId,
@@ -84,24 +94,19 @@ export async function submitPayment(
       createdAt: now,
     });
 
-    // Update request status
     await requestsRef.doc(body.requestId).update({
       status: REQUEST_STATUSES.PAYMENT_SUBMITTED,
       proofOfPaymentUrl: body.proofUrl,
       updatedAt: now,
     });
 
-    // Notify admin
-    const admins = await db
-      .collection("users")
-      .where("role", "==", "admin")
-      .get();
+    const admins = await db.collection("users").where("role", "==", "admin").get();
     for (const adminDoc of admins.docs) {
       await db.collection("notifications").add({
         userId: adminDoc.id,
         type: "payment_submitted",
         title: "Payment Proof Submitted",
-        body: `Payment proof submitted for ${requestData.categoryName} — ₱${totalAmount}`,
+        body: `Payment proof submitted for ${requestData.categoryName} - PHP ${totalAmount}`,
         referenceType: "payment",
         referenceId: paymentRef.id,
         isRead: false,
@@ -114,7 +119,7 @@ export async function submitPayment(
       performedBy: userId,
       targetRequestId: body.requestId,
       targetPaymentId: paymentRef.id,
-      details: `Payment proof submitted: ₱${totalAmount}`,
+      details: `Payment proof submitted: PHP ${totalAmount}`,
       createdAt: now,
     });
 
@@ -206,7 +211,7 @@ export async function confirmPayment(
       return;
     }
 
-    const now = admin.firestore.FieldValue.serverTimestamp();
+    const now = FieldValue.serverTimestamp();
 
     await paymentsRef.doc(paymentId).update({
       status: PAYMENT_STATUSES.CONFIRMED,
@@ -214,13 +219,11 @@ export async function confirmPayment(
       confirmedAt: now,
     });
 
-    // Update request status
     await requestsRef.doc(payment.requestId).update({
       status: REQUEST_STATUSES.PAYMENT_CONFIRMED,
       updatedAt: now,
     });
 
-    // Notify resident
     await db.collection("notifications").add({
       userId: payment.residentId,
       type: "payment_confirmed",
@@ -232,12 +235,11 @@ export async function confirmPayment(
       createdAt: now,
     });
 
-    // Notify worker
     await db.collection("notifications").add({
       userId: payment.workerId,
       type: "payment_confirmed",
       title: "Payment Received",
-      body: `Payment of ₱${payment.workerAmount} has been confirmed`,
+      body: `Payment of PHP ${payment.workerAmount} has been confirmed`,
       referenceType: "payment",
       referenceId: paymentId,
       isRead: false,
@@ -248,7 +250,7 @@ export async function confirmPayment(
       action: "payment_confirmed",
       performedBy: adminId,
       targetPaymentId: paymentId,
-      details: `Payment confirmed: ₱${payment.totalAmount}`,
+      details: `Payment confirmed: PHP ${payment.totalAmount}`,
       createdAt: now,
     });
 
@@ -285,7 +287,7 @@ export async function rejectPayment(
       return;
     }
 
-    const now = admin.firestore.FieldValue.serverTimestamp();
+    const now = FieldValue.serverTimestamp();
 
     await paymentsRef.doc(paymentId).update({
       status: PAYMENT_STATUSES.REJECTED,
@@ -294,13 +296,11 @@ export async function rejectPayment(
       rejectedAt: now,
     });
 
-    // Revert request to completed so resident can resubmit
     await requestsRef.doc(payment.requestId).update({
       status: REQUEST_STATUSES.COMPLETED,
       updatedAt: now,
     });
 
-    // Notify resident
     await db.collection("notifications").add({
       userId: payment.residentId,
       type: "payment_rejected",

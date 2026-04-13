@@ -12,29 +12,28 @@ interface Request {
   description: string;
   suggestedPrice: number;
   finalPrice?: number;
-  location: { latitude: number; longitude: number };
-  schedule: { date: string; startTime: string; endTime: string };
+  location: { _latitude?: number; _longitude?: number; latitude?: number; longitude?: number };
+  schedule: { date: string | { _seconds: number }; startTime: string; endTime: string };
   status: string;
   workerName?: string;
   workerRating?: number;
-  completedAt?: string;
-  createdAt?: string;
+  completedAt?: any;
+  updatedAt?: any;
+  createdAt?: any;
 }
 
-type Tab = "active" | "recent" | "history";
+type Tab = "active" | "payment" | "recent" | "history";
 
 const ACTIVE_STATUSES = [
+  "pending",
   "assigned",
   "accepted",
   "worker_arrived",
   "price_confirmed",
   "in_progress",
 ];
-const COMPLETED_STATUSES = [
-  "completed",
-  "payment_submitted",
-  "payment_confirmed",
-];
+const PAYMENT_STATUSES = ["completed", "payment_submitted"];
+const COMPLETED_STATUSES = ["payment_confirmed"];
 
 export function MyRequests() {
   useAuth();
@@ -53,13 +52,23 @@ export function MyRequests() {
 
   const fetchRequests = async () => {
     try {
-      const { data } = await api.get("/api/requests/my?role=resident");
+      const { data } = await api.get("/api/requests/my");
       setRequests(data.requests || []);
     } catch {
       toast.error("Failed to load requests");
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const parseFirestoreDate = (value: any): Date | null => {
+    if (!value) return null;
+    // Handle Firestore Timestamp object
+    if (typeof value === "object" && value._seconds) {
+      return new Date(value._seconds * 1000);
+    }
+    // Handle regular date string or number
+    return new Date(value);
   };
 
   const filterRequests = () => {
@@ -70,17 +79,23 @@ export function MyRequests() {
 
     if (activeTab === "active") {
       filtered = requests.filter((r) => ACTIVE_STATUSES.includes(r.status));
+    } else if (activeTab === "payment") {
+      filtered = requests.filter((r) => PAYMENT_STATUSES.includes(r.status));
     } else if (activeTab === "recent") {
       filtered = requests.filter((r) => {
         const isCompleted = COMPLETED_STATUSES.includes(r.status);
-        const completedDate = r.completedAt ? new Date(r.completedAt) : null;
+        // Use completedAt if available, fallback to updatedAt
+        const dateValue = r.completedAt || r.updatedAt;
+        const completedDate = parseFirestoreDate(dateValue);
         const isRecent = completedDate ? completedDate > thirtyDaysAgo : false;
         return isCompleted && isRecent;
       });
     } else if (activeTab === "history") {
       filtered = requests.filter((r) => {
         const isCompleted = COMPLETED_STATUSES.includes(r.status);
-        const completedDate = r.completedAt ? new Date(r.completedAt) : null;
+        // Use completedAt if available, fallback to updatedAt
+        const dateValue = r.completedAt || r.updatedAt;
+        const completedDate = parseFirestoreDate(dateValue);
         const isOld = completedDate ? completedDate <= thirtyDaysAgo : false;
         return isCompleted && isOld;
       });
@@ -91,17 +106,18 @@ export function MyRequests() {
 
   const getStatusColor = (status: string) => {
     const colors: Record<string, string> = {
+      pending: "bg-orange-50 text-orange-700 border-orange-200",
       assigned: "bg-yellow-50 text-yellow-700 border-yellow-200",
-      accepted: "bg-blue-50 text-blue-700 border-blue-200",
+      accepted: "bg-primary-50 text-primary-700 border-primary-200",
       worker_arrived: "bg-purple-50 text-purple-700 border-purple-200",
       price_confirmed: "bg-indigo-50 text-indigo-700 border-indigo-200",
       in_progress: "bg-accent-50 text-accent-700 border-accent-200",
-      completed: "bg-green-50 text-green-700 border-green-200",
-      payment_submitted: "bg-green-50 text-green-700 border-green-200",
-      payment_confirmed: "bg-green-100 text-green-800 border-green-300",
+      completed: "bg-emerald-50 text-emerald-700 border-emerald-200",
+      payment_submitted: "bg-emerald-50 text-emerald-700 border-emerald-200",
+      payment_confirmed: "bg-emerald-100 text-emerald-800 border-emerald-300",
       cancelled: "bg-red-50 text-red-700 border-red-200",
     };
-    return colors[status] || "bg-gray-50 text-gray-700 border-gray-200";
+    return colors[status] || "bg-slate-50 text-slate-700 border-slate-200";
   };
 
   const getStatusLabel = (status: string) => {
@@ -121,7 +137,7 @@ export function MyRequests() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold mb-2">My Service Requests</h2>
-          <p className="text-gray-600">
+          <p className="text-slate-600">
             Track and manage all your service requests
           </p>
         </div>
@@ -134,41 +150,56 @@ export function MyRequests() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2 border-b border-gray-200">
-        {(["active", "recent", "history"] as const).map((tab) => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === tab
-                ? "border-primary-600 text-primary-600"
-                : "border-transparent text-gray-600 hover:text-gray-900"
-            }`}
-          >
-            {tab.charAt(0).toUpperCase() + tab.slice(1)}
-            {activeTab === tab && (
-              <span className="ml-2 inline-block bg-primary-100 text-primary-700 rounded-full px-2 py-0.5 text-xs font-semibold">
-                {filteredRequests.length}
-              </span>
-            )}
-          </button>
-        ))}
+      <div className="flex gap-2 border-b border-slate-200 overflow-x-auto">
+        {(["active", "payment", "recent", "history"] as const).map((tab) => {
+          const tabLabel = tab === "payment" ? "Pending Payment" : tab.charAt(0).toUpperCase() + tab.slice(1);
+          const tabCount = tab === "active" ? requests.filter(r => ACTIVE_STATUSES.includes(r.status)).length :
+                          tab === "payment" ? requests.filter(r => PAYMENT_STATUSES.includes(r.status)).length : 0;
+
+          return (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                activeTab === tab
+                  ? "border-primary-600 text-primary-600"
+                  : "border-transparent text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              {tabLabel}
+              {(tab === "active" || tab === "payment") && tabCount > 0 && (
+                <span className="ml-2 inline-block bg-primary-100 text-primary-700 rounded-full px-2 py-0.5 text-xs font-semibold">
+                  {tabCount}
+                </span>
+              )}
+              {activeTab === tab && filteredRequests.length > 0 && !(tab === "active" || tab === "payment") && (
+                <span className="ml-2 inline-block bg-primary-100 text-primary-700 rounded-full px-2 py-0.5 text-xs font-semibold">
+                  {filteredRequests.length}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
       {/* Requests List */}
       {filteredRequests.length === 0 ? (
         <div className="card text-center py-12">
-          <Briefcase size={48} className="mx-auto text-gray-300 mb-4" />
-          <p className="text-gray-500 font-medium">
+          <Briefcase size={48} className="mx-auto text-slate-300 mb-4" />
+          <p className="text-slate-500 font-medium">
             {activeTab === "active"
               ? "No active requests"
+              : activeTab === "payment"
+              ? "No pending payments"
               : activeTab === "recent"
-              ? "No recent requests"
+              ? "No recent completed requests"
               : "No history"}
           </p>
-          <p className="text-sm text-gray-400 mt-2">
+          <p className="text-sm text-slate-400 mt-2">
             {activeTab === "active"
               ? "Submit a new service request to get started"
+              : activeTab === "payment"
+              ? "Your completed jobs awaiting payment will appear here"
               : "Your completed requests will appear here"}
           </p>
         </div>
@@ -192,33 +223,36 @@ export function MyRequests() {
                       {getStatusLabel(request.status)}
                     </span>
                   </div>
-                  <p className="text-sm text-gray-600">{request.itemName}</p>
+                  <p className="text-sm text-slate-600">{request.itemName}</p>
                 </div>
                 <p className="text-lg font-bold text-primary-600">
                   ₱{request.finalPrice || request.suggestedPrice}
                 </p>
               </div>
 
-              <p className="text-sm text-gray-700 mb-3 line-clamp-2">
+              <p className="text-sm text-slate-700 mb-3 line-clamp-2">
                 {request.description}
               </p>
 
-              <div className="flex items-center gap-4 text-xs text-gray-500 mb-3">
+              <div className="flex items-center gap-4 text-xs text-slate-500 mb-3">
                 <span className="flex items-center gap-1">
                   <Clock size={14} />
-                  {request.schedule.date} {request.schedule.startTime}
+                  {typeof request.schedule.date === "object"
+                    ? new Date(request.schedule.date._seconds * 1000).toLocaleDateString()
+                    : request.schedule.date}{" "}
+                  {request.schedule.startTime}
                 </span>
                 <span className="flex items-center gap-1">
                   <MapPin size={14} />
-                  {request.location.latitude.toFixed(4)},{" "}
-                  {request.location.longitude.toFixed(4)}
+                  {(request.location._latitude ?? request.location.latitude ?? 0).toFixed(4)},{" "}
+                  {(request.location._longitude ?? request.location.longitude ?? 0).toFixed(4)}
                 </span>
               </div>
 
-              <div className="flex items-center justify-between pt-3 border-t border-gray-100">
+              <div className="flex items-center justify-between pt-3 border-t border-slate-100">
                 <div className="flex-1">
                   {request.workerName && (
-                    <p className="text-xs text-gray-600">
+                    <p className="text-xs text-slate-600">
                       Worker:{" "}
                       <span className="font-medium">{request.workerName}</span>
                     </p>
@@ -230,7 +264,7 @@ export function MyRequests() {
                     </div>
                   )}
                 </div>
-                <span className="text-xs text-gray-400">
+                <span className="text-xs text-slate-400">
                   {ACTIVE_STATUSES.includes(request.status)
                     ? "Ongoing"
                     : "Completed"}

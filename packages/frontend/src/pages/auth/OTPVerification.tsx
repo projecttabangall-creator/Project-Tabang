@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useLocation, useNavigate, Link } from "react-router-dom";
 import { toast } from "sonner";
 import api from "@/services/api";
+import { BackButton } from "@/components/common/BackButton";
 
 export function OTPVerification() {
   const location = useLocation();
@@ -31,9 +32,9 @@ export function OTPVerification() {
 
   if (!contactNumber) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
         <div className="card text-center">
-          <p className="text-gray-500 mb-4">
+          <p className="text-slate-500 mb-4">
             No contact number provided. Please register first.
           </p>
           <Link to="/register" className="btn-primary inline-block">
@@ -45,16 +46,17 @@ export function OTPVerification() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+    <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
       <div className="w-full max-w-md">
+        <BackButton to="/register" label="Back to Register" />
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-primary-700">Tabang</h1>
-          <p className="text-gray-500 mt-2">Verify your account</p>
+          <p className="text-slate-500 mt-2">Verify your account</p>
         </div>
 
         <div className="card text-center">
           <h2 className="text-xl font-semibold mb-2">Enter OTP</h2>
-          <p className="text-gray-500 text-sm mb-6">
+          <p className="text-slate-500 text-sm mb-6">
             We sent a 6-digit code to <strong>{contactNumber}</strong>
           </p>
 
@@ -76,7 +78,7 @@ export function OTPVerification() {
             {isLoading ? "Verifying..." : "Verify"}
           </button>
 
-          <p className="text-sm text-gray-500 mt-4">
+          <p className="text-sm text-slate-500 mt-4">
             Didn't receive the code?{" "}
             <button className="text-primary-600 hover:text-primary-700 font-medium">
               Resend OTP

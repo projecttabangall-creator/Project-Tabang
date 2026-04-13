@@ -5,7 +5,6 @@ import {
   Shield,
   MapPin,
   Clock,
-  DollarSign,
   Star,
   CheckCircle,
   ArrowRight,
@@ -15,13 +14,13 @@ export function Landing() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-primary-50 to-white">
       {/* Header */}
-      <header className="sticky top-0 z-40 bg-white border-b border-gray-100">
+      <header className="sticky top-0 z-40 bg-white border-b border-slate-100">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-primary-700">Tabang</h1>
+          <h1 className="text-2xl font-extrabold text-primary-700 font-display tracking-tight">Tabang</h1>
           <div className="flex gap-3">
             <Link
               to="/login"
-              className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900"
+              className="px-4 py-2 text-sm font-medium text-slate-700 hover:text-slate-900"
             >
               Sign In
             </Link>
@@ -37,10 +36,10 @@ export function Landing() {
 
       {/* Hero Section */}
       <section className="max-w-7xl mx-auto px-4 py-20 text-center">
-        <h2 className="text-5xl font-bold text-gray-900 mb-6">
+        <h2 className="text-5xl font-extrabold text-slate-900 mb-6 font-display tracking-tight">
           Connect with Skilled Local Workers
         </h2>
-        <p className="text-xl text-gray-600 mb-8 max-w-2xl mx-auto">
+        <p className="text-xl text-slate-600 mb-8 max-w-2xl mx-auto">
           Project Tabang bridges residents with certified service workers in your barangay.
           Get quality work done. Fair pricing. Local support.
         </p>
@@ -65,42 +64,42 @@ export function Landing() {
             <div className="card">
               <MapPin className="text-primary-600 mb-4" size={32} />
               <h4 className="font-semibold mb-2">Smart Matching</h4>
-              <p className="text-gray-600 text-sm">
+              <p className="text-slate-600 text-sm">
                 AI-powered assignment connects you with the best-fit worker based on location, skills, and availability.
               </p>
             </div>
             <div className="card">
               <Clock className="text-accent-600 mb-4" size={32} />
               <h4 className="font-semibold mb-2">Flexible Scheduling</h4>
-              <p className="text-gray-600 text-sm">
+              <p className="text-slate-600 text-sm">
                 Choose your preferred date and time. Workers set their own availability schedules.
               </p>
             </div>
             <div className="card">
-              <DollarSign className="text-green-600 mb-4" size={32} />
+              <div className="text-emerald-600 mb-4 text-4xl">₱</div>
               <h4 className="font-semibold mb-2">Transparent Pricing</h4>
-              <p className="text-gray-600 text-sm">
+              <p className="text-slate-600 text-sm">
                 No hidden fees. Price is negotiated on-site. Commission goes back to the barangay.
               </p>
             </div>
             <div className="card">
               <Star className="text-yellow-500 mb-4" size={32} />
               <h4 className="font-semibold mb-2">Verified Workers</h4>
-              <p className="text-gray-600 text-sm">
+              <p className="text-slate-600 text-sm">
                 All workers are verified by barangay admin. Community ratings ensure quality service.
               </p>
             </div>
             <div className="card">
-              <Shield className="text-blue-600 mb-4" size={32} />
+              <Shield className="text-primary-600 mb-4" size={32} />
               <h4 className="font-semibold mb-2">Safe & Secure</h4>
-              <p className="text-gray-600 text-sm">
+              <p className="text-slate-600 text-sm">
                 Payment processed safely. Dispute resolution handled by barangay admin.
               </p>
             </div>
             <div className="card">
               <Users className="text-purple-600 mb-4" size={32} />
               <h4 className="font-semibold mb-2">Community Support</h4>
-              <p className="text-gray-600 text-sm">
+              <p className="text-slate-600 text-sm">
                 Support local workers. Keep money in the barangay. Build community trust.
               </p>
             </div>
@@ -118,7 +117,7 @@ export function Landing() {
                 <span className="text-2xl font-bold text-primary-600">1</span>
               </div>
               <h4 className="font-semibold mb-2">Request Service</h4>
-              <p className="text-sm text-gray-600">
+              <p className="text-sm text-slate-600">
                 Submit what you need, when, and where. Tell us the problem.
               </p>
             </div>
@@ -127,16 +126,16 @@ export function Landing() {
                 <span className="text-2xl font-bold text-accent-600">2</span>
               </div>
               <h4 className="font-semibold mb-2">Get Matched</h4>
-              <p className="text-sm text-gray-600">
+              <p className="text-sm text-slate-600">
                 System finds the best worker. They confirm and head to your location.
               </p>
             </div>
             <div className="text-center">
-              <div className="bg-green-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                <span className="text-2xl font-bold text-green-600">3</span>
+              <div className="bg-emerald-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                <span className="text-2xl font-bold text-emerald-600">3</span>
               </div>
               <h4 className="font-semibold mb-2">Work Done</h4>
-              <p className="text-sm text-gray-600">
+              <p className="text-sm text-slate-600">
                 Worker completes the job. Negotiate final price on-site if needed.
               </p>
             </div>
@@ -145,7 +144,7 @@ export function Landing() {
                 <span className="text-2xl font-bold text-yellow-600">4</span>
               </div>
               <h4 className="font-semibold mb-2">Pay & Rate</h4>
-              <p className="text-sm text-gray-600">
+              <p className="text-sm text-slate-600">
                 Submit proof of payment. Rate the worker. Work is complete!
               </p>
             </div>
@@ -154,29 +153,29 @@ export function Landing() {
       </section>
 
       {/* For Residents */}
-      <section className="bg-blue-50 py-16">
+      <section className="bg-primary-50 py-16">
         <div className="max-w-4xl mx-auto px-4">
           <div className="flex items-start gap-8">
             <div className="flex-1">
               <h3 className="text-3xl font-bold mb-4">For Residents</h3>
-              <p className="text-gray-700 mb-6">
+              <p className="text-slate-700 mb-6">
                 Need carpentry, plumbing, electrical work, masonry, or appliance repair? Tabang connects you with local, verified workers quickly and affordably.
               </p>
               <ul className="space-y-3 mb-8">
                 <li className="flex items-center gap-2">
-                  <CheckCircle size={20} className="text-green-600" />
+                  <CheckCircle size={20} className="text-emerald-600" />
                   <span>Self-register in minutes</span>
                 </li>
                 <li className="flex items-center gap-2">
-                  <CheckCircle size={20} className="text-green-600" />
+                  <CheckCircle size={20} className="text-emerald-600" />
                   <span>Get matched with verified workers</span>
                 </li>
                 <li className="flex items-center gap-2">
-                  <CheckCircle size={20} className="text-green-600" />
+                  <CheckCircle size={20} className="text-emerald-600" />
                   <span>Pay safely with proof submission</span>
                 </li>
                 <li className="flex items-center gap-2">
-                  <CheckCircle size={20} className="text-green-600" />
+                  <CheckCircle size={20} className="text-emerald-600" />
                   <span>Rate and review workers</span>
                 </li>
               </ul>
@@ -187,20 +186,20 @@ export function Landing() {
             <div className="flex-1 bg-white rounded-lg p-8 shadow-sm">
               <div className="space-y-4">
                 <div className="border-l-4 border-blue-600 pl-4">
-                  <p className="font-semibold text-sm text-gray-900">Quick matching</p>
-                  <p className="text-xs text-gray-600">Workers auto-assigned within minutes</p>
+                  <p className="font-semibold text-sm text-slate-900">Quick matching</p>
+                  <p className="text-xs text-slate-600">Workers auto-assigned within minutes</p>
                 </div>
                 <div className="border-l-4 border-blue-600 pl-4">
-                  <p className="font-semibold text-sm text-gray-900">Fair pricing</p>
-                  <p className="text-xs text-gray-600">Transparent rates with no surprise charges</p>
+                  <p className="font-semibold text-sm text-slate-900">Fair pricing</p>
+                  <p className="text-xs text-slate-600">Transparent rates with no surprise charges</p>
                 </div>
                 <div className="border-l-4 border-blue-600 pl-4">
-                  <p className="font-semibold text-sm text-gray-900">Safe payment</p>
-                  <p className="text-xs text-gray-600">Payment processing with dispute protection</p>
+                  <p className="font-semibold text-sm text-slate-900">Safe payment</p>
+                  <p className="text-xs text-slate-600">Payment processing with dispute protection</p>
                 </div>
                 <div className="border-l-4 border-blue-600 pl-4">
-                  <p className="font-semibold text-sm text-gray-900">Community trust</p>
-                  <p className="text-xs text-gray-600">Support local workers & barangay</p>
+                  <p className="font-semibold text-sm text-slate-900">Community trust</p>
+                  <p className="text-xs text-slate-600">Support local workers & barangay</p>
                 </div>
               </div>
             </div>
@@ -209,38 +208,38 @@ export function Landing() {
       </section>
 
       {/* For Workers */}
-      <section className="bg-green-50 py-16">
+      <section className="bg-emerald-50 py-16">
         <div className="max-w-4xl mx-auto px-4">
           <div className="flex items-start gap-8 flex-row-reverse">
             <div className="flex-1">
               <h3 className="text-3xl font-bold mb-4">For Workers</h3>
-              <p className="text-gray-700 mb-6">
+              <p className="text-slate-700 mb-6">
                 Skilled in carpentry, plumbing, electrical work, masonry, or appliance repair? Join Tabang and grow your client base with steady work from your barangay.
               </p>
               <ul className="space-y-3 mb-8">
                 <li className="flex items-center gap-2">
-                  <CheckCircle size={20} className="text-green-600" />
+                  <CheckCircle size={20} className="text-emerald-600" />
                   <span>Registered by barangay admin only</span>
                 </li>
                 <li className="flex items-center gap-2">
-                  <CheckCircle size={20} className="text-green-600" />
+                  <CheckCircle size={20} className="text-emerald-600" />
                   <span>Consistent job assignments</span>
                 </li>
                 <li className="flex items-center gap-2">
-                  <CheckCircle size={20} className="text-green-600" />
+                  <CheckCircle size={20} className="text-emerald-600" />
                   <span>Fair, negotiated pricing</span>
                 </li>
                 <li className="flex items-center gap-2">
-                  <CheckCircle size={20} className="text-green-600" />
+                  <CheckCircle size={20} className="text-emerald-600" />
                   <span>Build your reputation & ratings</span>
                 </li>
               </ul>
-              <p className="text-sm text-gray-600 mb-6">
+              <p className="text-sm text-slate-600 mb-6">
                 <strong>Note:</strong> Worker registration requires verification by your barangay admin.
               </p>
               <Link
                 to="/register"
-                className="px-6 py-3 border-2 border-green-600 text-green-600 font-medium rounded-lg hover:bg-green-50 transition-colors inline-flex items-center gap-2"
+                className="px-6 py-3 border-2 border-green-600 text-emerald-600 font-medium rounded-lg hover:bg-emerald-50 transition-colors inline-flex items-center gap-2"
               >
                 Apply as Worker <ArrowRight size={18} />
               </Link>
@@ -248,20 +247,20 @@ export function Landing() {
             <div className="flex-1 bg-white rounded-lg p-8 shadow-sm">
               <div className="space-y-4">
                 <div className="border-l-4 border-green-600 pl-4">
-                  <p className="font-semibold text-sm text-gray-900">Smart matching</p>
-                  <p className="text-xs text-gray-600">AI assigns jobs based on your skills & location</p>
+                  <p className="font-semibold text-sm text-slate-900">Smart matching</p>
+                  <p className="text-xs text-slate-600">AI assigns jobs based on your skills & location</p>
                 </div>
                 <div className="border-l-4 border-green-600 pl-4">
-                  <p className="font-semibold text-sm text-gray-900">Flexible scheduling</p>
-                  <p className="text-xs text-gray-600">Set your own availability and work hours</p>
+                  <p className="font-semibold text-sm text-slate-900">Flexible scheduling</p>
+                  <p className="text-xs text-slate-600">Set your own availability and work hours</p>
                 </div>
                 <div className="border-l-4 border-green-600 pl-4">
-                  <p className="font-semibold text-sm text-gray-900">Earn fairly</p>
-                  <p className="text-xs text-gray-600">Negotiate price with resident on-site</p>
+                  <p className="font-semibold text-sm text-slate-900">Earn fairly</p>
+                  <p className="text-xs text-slate-600">Negotiate price with resident on-site</p>
                 </div>
                 <div className="border-l-4 border-green-600 pl-4">
-                  <p className="font-semibold text-sm text-gray-900">Build profile</p>
-                  <p className="text-xs text-gray-600">Ratings & reviews grow your business</p>
+                  <p className="font-semibold text-sm text-slate-900">Build profile</p>
+                  <p className="text-xs text-slate-600">Ratings & reviews grow your business</p>
                 </div>
               </div>
             </div>
@@ -275,7 +274,7 @@ export function Landing() {
           <div className="flex items-start gap-8">
             <div className="flex-1">
               <h3 className="text-3xl font-bold mb-4">For Barangay Admin</h3>
-              <p className="text-gray-700 mb-6">
+              <p className="text-slate-700 mb-6">
                 Tabang empowers barangay administrators to register workers, oversee disputes, manage payments, and grow the local service economy.
               </p>
               <ul className="space-y-3 mb-8">
@@ -300,7 +299,7 @@ export function Landing() {
             <div className="flex-1 bg-white rounded-lg p-8 shadow-sm">
               <Briefcase size={32} className="text-purple-600 mb-4" />
               <p className="font-semibold mb-2">Admin Features</p>
-              <ul className="text-xs text-gray-600 space-y-2">
+              <ul className="text-xs text-slate-600 space-y-2">
                 <li>• Worker registration & verification</li>
                 <li>• Service category management</li>
                 <li>• Dashboard with real-time stats</li>
@@ -329,7 +328,7 @@ export function Landing() {
                     size={32}
                     className="text-primary-600 mx-auto mb-3"
                   />
-                  <h4 className="font-semibold text-gray-900">{service}</h4>
+                  <h4 className="font-semibold text-slate-900">{service}</h4>
                 </div>
               )
             )}
@@ -347,7 +346,7 @@ export function Landing() {
           <div className="flex gap-4 justify-center flex-wrap">
             <Link
               to="/register"
-              className="px-8 py-3 bg-white text-primary-600 font-semibold rounded-lg hover:bg-gray-100 transition-colors"
+              className="px-8 py-3 bg-white text-primary-600 font-semibold rounded-lg hover:bg-slate-100 transition-colors"
             >
               Register Now
             </Link>
@@ -362,7 +361,7 @@ export function Landing() {
       </section>
 
       {/* Footer */}
-      <footer className="bg-gray-900 text-gray-400 py-12">
+      <footer className="bg-slate-900 text-slate-400 py-12">
         <div className="max-w-7xl mx-auto px-4">
           <div className="grid md:grid-cols-4 gap-8 mb-8">
             <div>
@@ -432,7 +431,7 @@ export function Landing() {
               </ul>
             </div>
           </div>
-          <div className="border-t border-gray-800 pt-8 text-center">
+          <div className="border-t border-slate-800 pt-8 text-center">
             <p className="text-sm">
               © {new Date().getFullYear()} Project Tabang. All rights reserved.
             </p>

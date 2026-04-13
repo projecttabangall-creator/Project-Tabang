@@ -53,7 +53,8 @@ function checkAvailability(
 ): boolean {
   if (!availability || availability.length === 0) return false;
 
-  const requestDate = new Date(schedule.date);
+  const [year, month, day] = schedule.date.split("-").map(Number);
+  const requestDate = new Date(year, month - 1, day); // local time — avoids UTC midnight shifting day in PH timezone
   const dayOfWeek = requestDate.getDay();
 
   const matchingSlot = availability.find((slot) => slot.dayOfWeek === dayOfWeek);
@@ -79,7 +80,8 @@ function checkAvailability(
 export async function assignWorker(
   categoryId: string,
   location: RequestLocation,
-  schedule: RequestSchedule
+  schedule: RequestSchedule,
+  excludedWorkerIds: string[] = []
 ): Promise<AssignmentResult> {
   try {
     // Fetch all workers in this category
@@ -96,6 +98,7 @@ export async function assignWorker(
 
     // STAGE 1: Hard Filters
     const eligible = allWorkers.filter((w) => {
+      const notExcluded = !excludedWorkerIds.includes(w.uid);
       const categoryMatch = w.workerData.specialization === categoryId;
       const available = checkAvailability(w.workerData.availability, schedule);
       const creditOk = w.creditPoints >= MIN_CREDIT_FOR_ASSIGNMENT;
@@ -105,7 +108,7 @@ export async function assignWorker(
         w.isActive &&
         w.workerData.isAvailable;
 
-      return categoryMatch && available && creditOk && statusOk;
+      return notExcluded && categoryMatch && available && creditOk && statusOk;
     });
 
     // Edge case: no eligible workers

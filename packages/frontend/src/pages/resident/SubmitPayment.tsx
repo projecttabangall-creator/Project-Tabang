@@ -1,8 +1,9 @@
-import { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
-import { Upload, DollarSign, CheckCircle } from "lucide-react";
+import { Camera, CheckCircle, Upload, X } from "lucide-react";
 import api from "@/services/api";
+import { BackButton } from "@/components/common/BackButton";
 
 interface RequestData {
   id: string;
@@ -11,8 +12,10 @@ interface RequestData {
   suggestedPrice: number;
   finalPrice?: number;
   commission: number;
+  commissionPercent?: number;
   totalForResident: number;
   assignedWorkerName?: string;
+  workerName?: string;
   paymentMethod: string;
   status: string;
 }
@@ -20,10 +23,13 @@ interface RequestData {
 export function SubmitPayment() {
   const { requestId } = useParams<{ requestId: string }>();
   const navigate = useNavigate();
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
+
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [request, setRequest] = useState<RequestData | null>(null);
-  const [proofUrl, setProofUrl] = useState("");
+  const [proofDataUrl, setProofDataUrl] = useState<string | null>(null);
 
   useEffect(() => {
     fetchRequest();
@@ -32,13 +38,15 @@ export function SubmitPayment() {
   const fetchRequest = async () => {
     try {
       const { data } = await api.get(`/api/requests/${requestId}`);
-      const req = data.request || data;
-      if (req.status !== "completed") {
+      const currentRequest = data.request || data;
+
+      if (currentRequest.status !== "completed") {
         toast.error("Payment can only be submitted for completed jobs");
         navigate("/resident/requests");
         return;
       }
-      setRequest(req);
+
+      setRequest(currentRequest);
     } catch {
       toast.error("Failed to load request");
       navigate("/resident/requests");
@@ -47,11 +55,46 @@ export function SubmitPayment() {
     }
   };
 
+  const handleFileSelect = (file: File) => {
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please select an image file");
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("File size must be less than 5MB");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataUrl = e.target?.result as string;
+      setProofDataUrl(dataUrl);
+      toast.success("Photo selected");
+    };
+    reader.onerror = () => {
+      toast.error("Failed to read file");
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleCameraClick = () => {
+    cameraInputRef.current?.click();
+  };
+
+  const handleGalleryClick = () => {
+    galleryInputRef.current?.click();
+  };
+
+  const handleRemovePhoto = () => {
+    setProofDataUrl(null);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!proofUrl.trim()) {
-      toast.error("Please provide the proof of payment URL");
+    if (!proofDataUrl) {
+      toast.error("Please take or upload a photo");
       return;
     }
 
@@ -59,9 +102,9 @@ export function SubmitPayment() {
     try {
       await api.post("/api/payments", {
         requestId,
-        proofUrl: proofUrl.trim(),
+        proofUrl: proofDataUrl,
       });
-      toast.success("Payment proof submitted! Waiting for admin confirmation.");
+      toast.success("Payment proof submitted. Waiting for admin confirmation.");
       navigate(`/resident/request/${requestId}`);
     } catch (error: any) {
       toast.error(error.response?.data?.error || "Failed to submit payment");
@@ -78,112 +121,154 @@ export function SubmitPayment() {
     );
   }
 
-  if (!request) return null;
+  if (!request) {
+    return null;
+  }
 
   const finalPrice = request.finalPrice || request.suggestedPrice;
-  const commission = Math.round(finalPrice * 0.1);
-  const total = finalPrice + commission;
+  const commission = request.commission;
+  const total = request.totalForResident;
+  const commissionPercent = request.commissionPercent || 10;
 
   return (
     <div className="max-w-lg mx-auto space-y-6">
+      <BackButton to={`/resident/request/${requestId}`} label="Back to Request" />
       <h2 className="text-2xl font-bold">Submit Payment</h2>
 
-      {/* Job Summary */}
       <div className="card space-y-3">
         <h3 className="font-semibold">Job Summary</h3>
         <div className="text-sm space-y-1">
           <p>
-            <span className="text-gray-600">Service:</span>{" "}
-            <span className="font-medium">{request.categoryName} — {request.itemName}</span>
+            <span className="text-slate-600">Service:</span>{" "}
+            <span className="font-medium">
+              {request.categoryName} - {request.itemName}
+            </span>
           </p>
           <p>
-            <span className="text-gray-600">Worker:</span>{" "}
-            <span className="font-medium">{request.assignedWorkerName}</span>
+            <span className="text-slate-600">Worker:</span>{" "}
+            <span className="font-medium">
+              {request.workerName || request.assignedWorkerName}
+            </span>
           </p>
           <p>
-            <span className="text-gray-600">Payment Method:</span>{" "}
+            <span className="text-slate-600">Payment Method:</span>{" "}
             <span className="font-medium uppercase">{request.paymentMethod}</span>
           </p>
         </div>
       </div>
 
-      {/* Pricing Breakdown */}
       <div className="card space-y-3">
         <h3 className="font-semibold flex items-center gap-2">
-          <DollarSign size={18} /> Payment Breakdown
+          <span className="text-lg">₱</span> Payment Breakdown
         </h3>
         <div className="space-y-2 text-sm">
           <div className="flex justify-between">
-            <span className="text-gray-600">Worker's Price</span>
-            <span className="font-medium">₱{finalPrice}</span>
+            <span className="text-slate-600">Worker's Price</span>
+            <span className="font-medium">PHP {finalPrice}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-gray-600">Service Fee (10%)</span>
-            <span className="font-medium">₱{commission}</span>
+            <span className="text-slate-600">
+              Service Fee ({commissionPercent}%)
+            </span>
+            <span className="font-medium">PHP {commission}</span>
           </div>
-          <div className="border-t border-gray-200 pt-2 flex justify-between">
+          <div className="border-t border-slate-200 pt-2 flex justify-between">
             <span className="font-semibold">Total</span>
-            <span className="font-bold text-lg text-primary-600">₱{total}</span>
+            <span className="font-bold text-lg text-primary-600">PHP {total}</span>
           </div>
         </div>
       </div>
 
-      {/* Payment Instructions */}
-      <div className="card bg-blue-50 border-blue-200 space-y-2">
-        <h3 className="font-semibold text-blue-800">Payment Instructions</h3>
+      <div className="card bg-primary-50 border-primary-200 space-y-2">
+        <h3 className="font-semibold text-primary-800">Payment Instructions</h3>
         {request.paymentMethod === "gcash" ? (
-          <div className="text-sm text-blue-700 space-y-1">
-            <p>1. Open GCash and send <strong>₱{total}</strong> to the worker</p>
-            <p>2. Take a screenshot of the confirmation</p>
-            <p>3. Upload the screenshot to Firebase Storage or any image hosting</p>
-            <p>4. Paste the URL below and submit</p>
+          <div className="text-sm text-primary-700 space-y-1">
+            <p>1. Send <strong>₱{total}</strong> via GCash to the worker.</p>
+            <p>2. Take a screenshot of your GCash confirmation.</p>
+            <p>3. Upload the screenshot below.</p>
           </div>
         ) : (
-          <div className="text-sm text-blue-700 space-y-1">
-            <p>1. Pay <strong>₱{total}</strong> in cash to the worker</p>
-            <p>2. Take a photo of the receipt or cash hand-off</p>
-            <p>3. Upload the photo to Firebase Storage or any image hosting</p>
-            <p>4. Paste the URL below and submit</p>
+          <div className="text-sm text-primary-700 space-y-1">
+            <p>1. Pay <strong>₱{total}</strong> in cash to the worker.</p>
+            <p>2. Take a photo of the cash hand-off or receipt.</p>
+            <p>3. Upload the photo below.</p>
           </div>
         )}
       </div>
 
-      {/* Upload Form */}
       <form onSubmit={handleSubmit} className="card space-y-4">
         <h3 className="font-semibold flex items-center gap-2">
           <Upload size={18} /> Proof of Payment
         </h3>
 
-        <div>
-          <label className="label">Proof URL</label>
-          <input
-            type="url"
-            placeholder="https://firebasestorage.googleapis.com/..."
-            className="input-field"
-            value={proofUrl}
-            onChange={(e) => setProofUrl(e.target.value)}
-          />
-          <p className="text-xs text-gray-500 mt-1">
-            Upload your payment proof to Firebase Storage and paste the download URL here
-          </p>
-        </div>
+        {/* Hidden file inputs */}
+        <input
+          ref={cameraInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="hidden"
+          onChange={(e) => e.target.files?.[0] && handleFileSelect(e.target.files[0])}
+        />
+        <input
+          ref={galleryInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => e.target.files?.[0] && handleFileSelect(e.target.files[0])}
+        />
+
+        {/* Preview or Action Buttons */}
+        {!proofDataUrl ? (
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={handleCameraClick}
+              disabled={isSubmitting}
+              className="flex-1 py-3 bg-primary-50 hover:bg-primary-100 disabled:bg-slate-100 text-primary-700 disabled:text-slate-400 font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
+            >
+              <Camera size={18} />
+              Take Photo
+            </button>
+            <button
+              type="button"
+              onClick={handleGalleryClick}
+              disabled={isSubmitting}
+              className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 disabled:bg-slate-100 text-slate-700 disabled:text-slate-400 font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
+            >
+              <Upload size={18} />
+              Upload
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="relative w-full rounded-lg overflow-hidden border border-slate-200 bg-slate-50">
+              <img
+                src={proofDataUrl}
+                alt="Payment proof preview"
+                className="w-full h-48 object-cover"
+              />
+              <button
+                type="button"
+                onClick={handleRemovePhoto}
+                disabled={isSubmitting}
+                className="absolute top-2 right-2 p-1.5 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded-full transition-colors"
+              >
+                <X size={16} />
+              </button>
+            </div>
+          </div>
+        )}
 
         <button
           type="submit"
-          disabled={isSubmitting || !proofUrl.trim()}
+          disabled={isSubmitting || !proofDataUrl}
           className="btn-primary w-full flex items-center justify-center gap-2"
         >
           <CheckCircle size={18} />
           {isSubmitting ? "Submitting..." : "Submit Payment Proof"}
         </button>
       </form>
-
-      <button
-        onClick={() => navigate(`/resident/request/${requestId}`)}
-        className="w-full py-2 text-gray-700 hover:text-gray-900 font-medium"
-      >
-        ← Back to Request
-      </button>
     </div>
   );
 }

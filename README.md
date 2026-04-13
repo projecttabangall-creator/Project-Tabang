@@ -35,12 +35,17 @@ A community-driven, role-based worker/service booking platform for Barangay (Phi
    npx firebase emulators:start
    ```
 
-4. **Start frontend dev server (Terminal 2):**
+4. **Seed demo accounts (Terminal 2):**
+   ```bash
+   npm run seed
+   ```
+
+5. **Start frontend dev server (Terminal 2):**
    ```bash
    npm run dev:frontend
    ```
 
-5. **Open in browser:**
+6. **Open in browser:**
    - http://localhost:3001
 
 ---

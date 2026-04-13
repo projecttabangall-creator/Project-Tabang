@@ -1,25 +1,33 @@
-import { Outlet } from "react-router-dom";
+import { Outlet, NavLink } from "react-router-dom";
 import { MobileNav } from "./MobileNav";
 import { useAuth } from "@/contexts/AuthContext";
 import { LogOut } from "lucide-react";
+import { getNavItems } from "./navItems";
 
 export function AppLayout() {
   const { userProfile, signOut } = useAuth();
 
+  const navItems = userProfile ? getNavItems(userProfile.role) : [];
+
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-slate-50 flex flex-col">
       {/* Top header */}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between">
-          <h1 className="text-lg font-bold text-primary-700">Tabang</h1>
+      <header className="bg-white border-b border-slate-200 sticky top-0 z-40 h-14">
+        <div className="max-w-full px-4 h-full flex items-center justify-between">
+          <h1 className="text-xl font-extrabold text-primary-700 font-display tracking-tight">
+            Tabang
+          </h1>
           {userProfile && (
             <div className="flex items-center gap-3">
-              <span className="text-sm text-gray-600 hidden sm:block">
-                {userProfile.firstName} ({userProfile.role})
+              <span className="text-sm text-slate-600 hidden sm:block font-medium">
+                {userProfile.firstName}
+                <span className="ml-1.5 text-xs bg-primary-100 text-primary-700 px-2 py-0.5 rounded-full font-semibold">
+                  {userProfile.role}
+                </span>
               </span>
               <button
                 onClick={signOut}
-                className="p-2 text-gray-500 hover:text-gray-700 rounded-lg hover:bg-gray-100"
+                className="p-2 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100 transition-colors"
                 title="Sign out"
               >
                 <LogOut size={18} />
@@ -27,12 +35,43 @@ export function AppLayout() {
             </div>
           )}
         </div>
+        {/* Accent stripe */}
+        <div className="h-0.5 bg-gradient-to-r from-primary-600 via-accent-400 to-primary-600" />
       </header>
 
-      {/* Main content */}
-      <main className="max-w-7xl mx-auto px-4 py-6 pb-24 md:pb-6">
-        <Outlet />
-      </main>
+      {/* Layout with sidebar + main content */}
+      <div className="flex flex-1">
+        {/* Desktop Sidebar */}
+        {userProfile && (
+          <aside className="hidden md:flex flex-col w-56 bg-white border-r border-slate-200 sticky top-14 h-[calc(100vh-56px)] overflow-y-auto">
+            <nav className="flex-1 p-3 space-y-1">
+              {navItems.map((item) => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  className={({ isActive }) =>
+                    `flex items-center gap-3 px-4 py-3 rounded-lg mx-1 text-sm transition-colors font-medium ${
+                      isActive
+                        ? "bg-primary-50 text-primary-700"
+                        : "text-slate-600 hover:bg-slate-100"
+                    }`
+                  }
+                >
+                  <item.icon size={18} />
+                  <span>{item.label}</span>
+                </NavLink>
+              ))}
+            </nav>
+          </aside>
+        )}
+
+        {/* Main content */}
+        <main className="flex-1 px-4 py-6 pb-24 md:pb-6 overflow-y-auto">
+          <div className="max-w-7xl mx-auto">
+            <Outlet />
+          </div>
+        </main>
+      </div>
 
       {/* Mobile bottom navigation */}
       <MobileNav />

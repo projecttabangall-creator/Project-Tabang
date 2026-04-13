@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { AlertTriangle, Upload } from "lucide-react";
 import api from "@/services/api";
 import { useAuth } from "@/contexts/AuthContext";
+import { BackButton } from "@/components/common/BackButton";
 
 const DISPUTE_TYPES = [
   { value: "work_quality", label: "Work Quality Issue" },
@@ -50,7 +51,9 @@ export function FileDispute() {
         evidenceUrls,
       });
 
-      toast.success("Dispute filed successfully. An admin will review it within 72 hours.");
+      toast.success(
+        "Dispute filed successfully. Admin review will begin shortly."
+      );
       navigate(backPath);
     } catch (error: any) {
       toast.error(error.response?.data?.error || "Failed to file dispute");
@@ -61,6 +64,7 @@ export function FileDispute() {
 
   return (
     <div className="max-w-lg mx-auto space-y-6">
+      <BackButton to={backPath} label="Back" />
       <div className="flex items-center gap-3">
         <AlertTriangle size={28} className="text-red-500" />
         <h2 className="text-2xl font-bold">File a Dispute</h2>
@@ -68,9 +72,10 @@ export function FileDispute() {
 
       <div className="card bg-yellow-50 border-yellow-200">
         <p className="text-sm text-yellow-800">
-          Filing a dispute will pause the current transaction. A barangay admin
-          will review your case within <strong>72 hours</strong>. Please provide
-          as much detail and evidence as possible.
+          Filing a dispute will pause the current transaction. You can raise a
+          dispute while the work is active or within <strong>24 hours</strong>{" "}
+          after completion. Please provide as much detail and evidence as
+          possible.
         </p>
       </div>
 
@@ -85,7 +90,7 @@ export function FileDispute() {
                 className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
                   disputeType === type.value
                     ? "border-primary-300 bg-primary-50"
-                    : "border-gray-200 hover:border-gray-300"
+                    : "border-slate-200 hover:border-slate-300"
                 }`}
               >
                 <input
@@ -111,7 +116,7 @@ export function FileDispute() {
             value={description}
             onChange={(e) => setDescription(e.target.value)}
           />
-          <p className="text-xs text-gray-500">Minimum 10 characters</p>
+          <p className="text-xs text-slate-500">Minimum 10 characters</p>
         </div>
 
         {/* Evidence */}
@@ -128,7 +133,7 @@ export function FileDispute() {
               value={evidenceUrl}
               onChange={(e) => setEvidenceUrl(e.target.value)}
             />
-            <p className="text-xs text-gray-500 mt-1">
+            <p className="text-xs text-slate-500 mt-1">
               Upload photos or screenshots to Firebase Storage and paste the URL
             </p>
           </div>
@@ -144,12 +149,6 @@ export function FileDispute() {
         </button>
       </form>
 
-      <button
-        onClick={() => navigate(backPath)}
-        className="w-full py-2 text-gray-700 hover:text-gray-900 font-medium"
-      >
-        ← Cancel
-      </button>
     </div>
   );
 }

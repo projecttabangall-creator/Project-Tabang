@@ -10,6 +10,7 @@ import {
   createItem,
   updateItem,
   deleteItem,
+  deleteCategory,
 } from "../controllers/category.controller";
 
 export const categoryRouter = Router();
@@ -29,6 +30,9 @@ categoryRouter.post(
 
 // PATCH /api/categories/:id — update category (admin only)
 categoryRouter.patch("/:id", roleGuard("admin"), updateCategory);
+
+// DELETE /api/categories/:id — delete category (admin only)
+categoryRouter.delete("/:id", roleGuard("admin"), deleteCategory);
 
 // POST /api/categories/:id/items — add item (admin only)
 categoryRouter.post(

@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { Shield, Ban, UserCheck } from "lucide-react";
 import api from "@/services/api";
+import { BackButton } from "@/components/common/BackButton";
 
 interface UserItem {
   id: string;
@@ -82,15 +83,15 @@ export function UserManagement() {
   }
 
   const statusColor: Record<string, string> = {
-    active: "bg-green-50 text-green-700",
+    active: "bg-emerald-50 text-emerald-700",
     suspended: "bg-yellow-50 text-yellow-700",
     banned: "bg-red-50 text-red-700",
   };
 
   const roleColor: Record<string, string> = {
-    resident: "bg-blue-50 text-blue-700",
+    resident: "bg-primary-50 text-primary-700",
     worker: "bg-purple-50 text-purple-700",
-    admin: "bg-gray-100 text-gray-700",
+    admin: "bg-slate-100 text-slate-700",
   };
 
   if (loading) {
@@ -103,6 +104,7 @@ export function UserManagement() {
 
   return (
     <div>
+      <BackButton to="/admin/dashboard" label="Back to Dashboard" />
       <h2 className="text-2xl font-bold mb-6">User Management</h2>
 
       {/* Role filter */}
@@ -119,7 +121,7 @@ export function UserManagement() {
             className={`px-4 py-2 text-sm font-medium rounded-lg border transition-colors ${
               roleFilter === tab.value
                 ? "bg-primary-600 text-white border-primary-600"
-                : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
+                : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
             }`}
           >
             {tab.label}
@@ -129,7 +131,7 @@ export function UserManagement() {
 
       {users.length === 0 ? (
         <div className="card text-center py-12">
-          <p className="text-gray-500">No users found.</p>
+          <p className="text-slate-500">No users found.</p>
         </div>
       ) : (
         <div className="space-y-2">
@@ -139,7 +141,7 @@ export function UserManagement() {
               className="card py-3 flex items-center justify-between"
             >
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 bg-gray-100 rounded-full flex items-center justify-center text-gray-600 font-bold text-xs">
+                <div className="w-9 h-9 bg-slate-100 rounded-full flex items-center justify-center text-slate-600 font-bold text-xs">
                   {user.firstName[0]}
                   {user.lastName[0]}
                 </div>
@@ -147,7 +149,7 @@ export function UserManagement() {
                   <p className="font-medium text-sm">
                     {user.firstName} {user.lastName}
                   </p>
-                  <p className="text-xs text-gray-400">{user.contactNumber}</p>
+                  <p className="text-xs text-slate-400">{user.contactNumber}</p>
                 </div>
               </div>
 
@@ -171,7 +173,7 @@ export function UserManagement() {
                   onClick={() =>
                     handleCreditChange(user.id, user.creditPoints)
                   }
-                  className="text-xs text-gray-500 hover:text-primary-600 px-2 py-0.5 rounded border border-gray-200"
+                  className="text-xs text-slate-500 hover:text-primary-600 px-2 py-0.5 rounded border border-slate-200"
                   title="Adjust credit points"
                 >
                   {user.creditPoints}/5
@@ -181,7 +183,7 @@ export function UserManagement() {
                 {user.accountStatus !== "active" && (
                   <button
                     onClick={() => handleStatusChange(user.id, "active")}
-                    className="text-green-600 hover:text-green-700"
+                    className="text-emerald-600 hover:text-emerald-700"
                     title="Activate"
                   >
                     <UserCheck size={16} />

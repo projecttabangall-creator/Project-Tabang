@@ -10,6 +10,7 @@ export * from "./types/notification";
 export * from "./constants/roles";
 export * from "./constants/statuses";
 export * from "./constants/config";
+export * from "./constants/workerCredentials";
 
 // Validation schemas
 export * from "./validation/auth";

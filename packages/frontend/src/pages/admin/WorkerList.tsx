@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
   CheckCircle,
@@ -31,6 +31,7 @@ interface Worker {
 }
 
 export function WorkerList() {
+  const navigate = useNavigate();
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -94,7 +95,7 @@ export function WorkerList() {
             className={`px-4 py-2 text-sm font-medium rounded-lg border transition-colors ${
               statusFilter === tab.value
                 ? "bg-primary-600 text-white border-primary-600"
-                : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
+                : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
             }`}
           >
             {tab.label}
@@ -104,12 +105,24 @@ export function WorkerList() {
 
       {workers.length === 0 ? (
         <div className="card text-center py-12">
-          <p className="text-gray-500">No workers found.</p>
+          <p className="text-slate-500">No workers found.</p>
         </div>
       ) : (
         <div className="space-y-3">
           {workers.map((worker) => (
-            <div key={worker.id} className="card flex items-center justify-between">
+            <div
+              key={worker.id}
+              role="button"
+              tabIndex={0}
+              onClick={() => navigate(`/admin/workers/${worker.id}`)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  navigate(`/admin/workers/${worker.id}`);
+                }
+              }}
+              className="card flex items-center justify-between cursor-pointer transition-all hover:border-primary-200 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+            >
               <div className="flex items-center gap-4">
                 <div className="w-10 h-10 bg-accent-100 rounded-full flex items-center justify-center text-accent-700 font-bold text-sm">
                   {worker.firstName[0]}
@@ -120,10 +133,10 @@ export function WorkerList() {
                     {worker.lastName}, {worker.firstName}{" "}
                     {worker.middleInitial ? `${worker.middleInitial}.` : ""}
                   </p>
-                  <p className="text-sm text-gray-500">
+                  <p className="text-sm text-slate-500">
                     {worker.contactNumber}
                   </p>
-                  <div className="flex gap-3 mt-1 text-xs text-gray-400">
+                  <div className="flex gap-3 mt-1 text-xs text-slate-400">
                     <span className="flex items-center gap-1">
                       <Star size={12} />
                       {worker.workerData?.averageRating?.toFixed(1) || "N/A"}
@@ -143,7 +156,7 @@ export function WorkerList() {
               <div className="flex items-center gap-3">
                 {/* Status badge */}
                 {worker.isVerified ? (
-                  <span className="flex items-center gap-1 text-xs text-green-600 bg-green-50 px-2 py-1 rounded-full">
+                  <span className="flex items-center gap-1 text-xs text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full">
                     <CheckCircle size={12} /> Verified
                   </span>
                 ) : (
@@ -155,7 +168,11 @@ export function WorkerList() {
                 {/* Verify button */}
                 {!worker.isVerified && (
                   <button
-                    onClick={() => handleVerify(worker.id)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleVerify(worker.id);
+                    }}
+                    onKeyDown={(e) => e.stopPropagation()}
                     className="btn-primary text-xs py-1 px-3"
                   >
                     Verify

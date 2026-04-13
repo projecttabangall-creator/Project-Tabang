@@ -1,10 +1,13 @@
-import { useState, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { MapPin, Calendar, Clock, DollarSign } from "lucide-react";
-import { MapContainer, TileLayer, Marker, useMapEvents } from "react-leaflet";
+import { BackButton } from "@/components/common/BackButton";
+import { Calendar, Camera, Clock, MapPin, Upload, X } from "lucide-react";
+import { MapContainer, Marker, TileLayer, useMapEvents } from "react-leaflet";
 import api from "@/services/api";
+
+const DEFAULT_COMMISSION_PERCENT = 10;
 
 interface Category {
   id: string;
@@ -26,15 +29,14 @@ interface RequestFormData {
   paymentMethod: "gcash" | "cash";
 }
 
-// Custom hook for map click
 function MapClickHandler({
   onLocationSelect,
 }: {
   onLocationSelect: (lat: number, lng: number) => void;
 }) {
   useMapEvents({
-    click(e) {
-      onLocationSelect(e.latlng.lat, e.latlng.lng);
+    click(event) {
+      onLocationSelect(event.latlng.lat, event.latlng.lng);
     },
   });
   return null;
@@ -42,11 +44,19 @@ function MapClickHandler({
 
 export function RequestService() {
   const navigate = useNavigate();
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
-  const [mapPosition, setMapPosition] = useState<[number, number]>([10.3456, 123.9132]); // Banilad, Cebu
-  const [markerPosition, setMarkerPosition] = useState<[number, number] | null>(null);
+  const [mapPosition, setMapPosition] = useState<[number, number]>([
+    10.3456,
+    123.9132,
+  ]);
+  const [markerPosition, setMarkerPosition] = useState<[number, number] | null>(
+    null
+  );
+  const [photoDataUrls, setPhotoDataUrls] = useState<string[]>([]);
 
   const {
     register,
@@ -66,10 +76,15 @@ export function RequestService() {
   });
 
   const categoryId = watch("categoryId");
+  const itemId = watch("itemId");
   const latitude = watch("latitude");
   const longitude = watch("longitude");
+  const suggestedPrice = Number(watch("suggestedPrice") || 0);
+  const commissionEstimate = Math.round(
+    suggestedPrice * (DEFAULT_COMMISSION_PERCENT / 100)
+  );
+  const totalEstimate = suggestedPrice + commissionEstimate;
 
-  // Update marker when coordinates change
   useEffect(() => {
     if (latitude && longitude) {
       setMarkerPosition([latitude, longitude]);
@@ -77,34 +92,105 @@ export function RequestService() {
     }
   }, [latitude, longitude]);
 
-  // Load categories
+  useEffect(() => {
+    if (selectedCategory && itemId) {
+      const selectedItem = selectedCategory.items.find((item) => item.id === itemId);
+      if (selectedItem && selectedItem.minPrice === 0) {
+        setValue("suggestedPrice", 0);
+      }
+    }
+  }, [itemId, selectedCategory, setValue]);
+
   useEffect(() => {
     api
       .get("/api/categories")
-      .then(({ data }) => {
-        setCategories(data.categories);
-      })
+      .then(({ data }) => setCategories(data.categories))
       .catch(() => toast.error("Failed to load categories"));
   }, []);
 
-  // Update selected category when categoryId changes
   useEffect(() => {
     if (categoryId) {
-      const selected = categories.find((c) => c.id === categoryId);
+      const selected = categories.find((category) => category.id === categoryId);
       setSelectedCategory(selected || null);
     }
   }, [categoryId, categories]);
 
-  const handleLocationSelect = (lat: number, lng: number) => {
-    setValue("latitude", lat);
-    setValue("longitude", lng);
-    toast.success("Location selected");
+  const handleLocationSelect = async (lat: number, lng: number) => {
+    const roundedLat = Math.round(lat * 1000000) / 1000000;
+    const roundedLng = Math.round(lng * 1000000) / 1000000;
+
+    setValue("latitude", roundedLat);
+    setValue("longitude", roundedLng);
+
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`
+      );
+      const data = await response.json();
+
+      if (data.address) {
+        const addressParts = [
+          data.address.road,
+          data.address.suburb || data.address.village,
+          data.address.city || data.address.town,
+        ]
+          .filter(Boolean)
+          .join(", ");
+
+        if (addressParts) {
+          setValue("locationAddress", addressParts);
+        }
+      }
+
+      toast.success("Location selected");
+    } catch {
+      toast.success("Location selected (address lookup failed)");
+    }
+  };
+
+  const handleFileSelect = (file: File) => {
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please select an image file");
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("File size must be less than 5MB");
+      return;
+    }
+
+    if (photoDataUrls.length >= 3) {
+      toast.error("Maximum 3 photos allowed");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataUrl = e.target?.result as string;
+      setPhotoDataUrls([...photoDataUrls, dataUrl]);
+      toast.success("Photo added");
+    };
+    reader.onerror = () => {
+      toast.error("Failed to read file");
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleCameraClick = () => {
+    cameraInputRef.current?.click();
+  };
+
+  const handleGalleryClick = () => {
+    galleryInputRef.current?.click();
+  };
+
+  const handleRemovePhoto = (index: number) => {
+    setPhotoDataUrls(photoDataUrls.filter((_, i) => i !== index));
   };
 
   const onSubmit = async (data: RequestFormData) => {
     setIsLoading(true);
     try {
-
       await api.post("/api/requests", {
         categoryId: data.categoryId,
         itemId: data.itemId,
@@ -115,7 +201,7 @@ export function RequestService() {
           longitude: data.longitude,
         },
         locationAddress: data.locationAddress,
-        photoUrls: [],
+        photoUrls: photoDataUrls,
         schedule: {
           date: data.date,
           startTime: data.startTime,
@@ -124,7 +210,7 @@ export function RequestService() {
         paymentMethod: data.paymentMethod,
       });
 
-      toast.success("Service request submitted!");
+      toast.success("Service request submitted.");
       navigate("/resident/requests");
     } catch (error: any) {
       toast.error(error.response?.data?.error || "Failed to submit request");
@@ -133,12 +219,15 @@ export function RequestService() {
     }
   };
 
+  const isFreeService =
+    selectedCategory?.items.find((item) => item.id === itemId)?.minPrice === 0;
+
   return (
     <div className="max-w-4xl mx-auto">
+      <BackButton to="/resident/requests" label="Back to Requests" />
       <h2 className="text-2xl font-bold mb-6">Request a Service</h2>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-        {/* Service Category & Item */}
         <div className="card space-y-4">
           <h3 className="font-semibold text-lg">What Service Do You Need?</h3>
 
@@ -149,9 +238,9 @@ export function RequestService() {
               {...register("categoryId", { required: "Category is required" })}
             >
               <option value="">Select a category...</option>
-              {categories.map((cat) => (
-                <option key={cat.id} value={cat.id}>
-                  {cat.name}
+              {categories.map((category) => (
+                <option key={category.id} value={category.id}>
+                  {category.name}
                 </option>
               ))}
             </select>
@@ -172,20 +261,17 @@ export function RequestService() {
                 <option value="">Select an item...</option>
                 {selectedCategory.items.map((item) => (
                   <option key={item.id} value={item.id}>
-                    {item.name} (Min: ₱{item.minPrice})
+                    {item.name} (Min: PHP {item.minPrice})
                   </option>
                 ))}
               </select>
               {errors.itemId && (
-                <p className="text-red-500 text-xs mt-1">
-                  {errors.itemId.message}
-                </p>
+                <p className="text-red-500 text-xs mt-1">{errors.itemId.message}</p>
               )}
             </div>
           )}
         </div>
 
-        {/* Description */}
         <div className="card">
           <h3 className="font-semibold text-lg mb-4">Problem Description</h3>
           <textarea
@@ -206,24 +292,113 @@ export function RequestService() {
           )}
         </div>
 
-        {/* Location */}
+        <div className="card space-y-4">
+          <h3 className="font-semibold text-lg flex items-center gap-2">
+            <Upload size={20} /> Photos (Optional)
+          </h3>
+          <p className="text-sm text-slate-600">
+            Add up to 3 photos to help the worker understand the job
+          </p>
+
+          {/* Hidden file inputs */}
+          <input
+            ref={cameraInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={(e) => e.target.files?.[0] && handleFileSelect(e.target.files[0])}
+          />
+          <input
+            ref={galleryInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => e.target.files?.[0] && handleFileSelect(e.target.files[0])}
+          />
+
+          {/* Photo previews */}
+          {photoDataUrls.length > 0 ? (
+            <div className="space-y-3">
+              <div className="flex gap-3 overflow-x-auto pb-2">
+                {photoDataUrls.map((dataUrl, index) => (
+                  <div key={index} className="relative shrink-0 w-24 h-24 rounded-lg overflow-hidden border border-slate-200 bg-slate-50">
+                    <img src={dataUrl} alt={`Photo ${index + 1}`} className="w-full h-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => handleRemovePhoto(index)}
+                      disabled={isLoading}
+                      className="absolute top-1 right-1 p-1 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded-full transition-colors"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+              {photoDataUrls.length < 3 && (
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={handleCameraClick}
+                    disabled={isLoading}
+                    className="flex-1 py-2 bg-primary-50 hover:bg-primary-100 disabled:bg-slate-100 text-primary-700 disabled:text-slate-400 font-medium rounded-lg transition-colors flex items-center justify-center gap-2 text-sm"
+                  >
+                    <Camera size={16} />
+                    Add Photo
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleGalleryClick}
+                    disabled={isLoading}
+                    className="flex-1 py-2 bg-slate-100 hover:bg-slate-200 disabled:bg-slate-100 text-slate-700 disabled:text-slate-400 font-medium rounded-lg transition-colors flex items-center justify-center gap-2 text-sm"
+                  >
+                    <Upload size={16} />
+                    Upload
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={handleCameraClick}
+                disabled={isLoading}
+                className="flex-1 py-3 bg-primary-50 hover:bg-primary-100 disabled:bg-slate-100 text-primary-700 disabled:text-slate-400 font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
+              >
+                <Camera size={18} />
+                Take Photo
+              </button>
+              <button
+                type="button"
+                onClick={handleGalleryClick}
+                disabled={isLoading}
+                className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 disabled:bg-slate-100 text-slate-700 disabled:text-slate-400 font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
+              >
+                <Upload size={18} />
+                Upload
+              </button>
+            </div>
+          )}
+        </div>
+
         <div className="card space-y-4">
           <h3 className="font-semibold text-lg flex items-center gap-2">
             <MapPin size={20} /> Location
           </h3>
 
-          <div className="h-80 rounded-lg overflow-hidden border border-gray-200">
+          <div className="h-80 rounded-lg overflow-hidden border border-slate-200">
             <MapContainer center={mapPosition} zoom={15} style={{ height: "100%" }}>
               <TileLayer
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                attribution='&copy; OpenStreetMap contributors'
+                attribution="&copy; OpenStreetMap contributors"
               />
               {markerPosition && <Marker position={markerPosition} />}
               <MapClickHandler onLocationSelect={handleLocationSelect} />
             </MapContainer>
           </div>
 
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-slate-500">
             Click on the map to select your location
           </p>
 
@@ -241,7 +416,7 @@ export function RequestService() {
               <label className="label text-xs">Latitude</label>
               <input
                 type="number"
-                step="0.0001"
+                step="any"
                 className="input-field"
                 {...register("latitude", { required: true, valueAsNumber: true })}
               />
@@ -250,7 +425,7 @@ export function RequestService() {
               <label className="label text-xs">Longitude</label>
               <input
                 type="number"
-                step="0.0001"
+                step="any"
                 className="input-field"
                 {...register("longitude", {
                   required: true,
@@ -261,7 +436,6 @@ export function RequestService() {
           </div>
         </div>
 
-        {/* Schedule */}
         <div className="card space-y-4">
           <h3 className="font-semibold text-lg flex items-center gap-2">
             <Calendar size={20} /> Preferred Schedule
@@ -313,14 +487,13 @@ export function RequestService() {
           </div>
         </div>
 
-        {/* Pricing */}
         <div className="card space-y-4">
           <h3 className="font-semibold text-lg flex items-center gap-2">
-            <DollarSign size={20} /> Pricing
+            <span className="text-xl">₱</span> Pricing
           </h3>
 
           <div>
-            <label className="label">Suggested Price (₱)</label>
+            <label className="label">Suggested Price (PHP)</label>
             <input
               type="number"
               placeholder="0"
@@ -335,37 +508,38 @@ export function RequestService() {
                 {errors.suggestedPrice.message}
               </p>
             )}
-            <p className="text-xs text-gray-500 mt-2">
-              This will be negotiated with the worker on-site
-            </p>
+
+            {isFreeService ? (
+              <p className="text-xs text-emerald-600 mt-2 font-medium">
+                This is a free service.
+              </p>
+            ) : (
+              <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600 space-y-1">
+                <p>This will still be negotiated with the worker on-site.</p>
+                <p>Estimated Barangay fee: PHP {commissionEstimate}</p>
+                <p className="font-medium text-slate-700">
+                  Estimated total you pay: PHP {totalEstimate}
+                </p>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Payment Method */}
         <div className="card space-y-4">
           <h3 className="font-semibold text-lg">Payment Method</h3>
 
           <div className="space-y-2">
             <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="radio"
-                value="gcash"
-                {...register("paymentMethod")}
-              />
+              <input type="radio" value="gcash" {...register("paymentMethod")} />
               <span>GCash</span>
             </label>
             <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="radio"
-                value="cash"
-                {...register("paymentMethod")}
-              />
+              <input type="radio" value="cash" {...register("paymentMethod")} />
               <span>Cash</span>
             </label>
           </div>
         </div>
 
-        {/* Submit */}
         <button
           type="submit"
           disabled={isLoading}

@@ -7,6 +7,7 @@ export interface Address {
 
 export interface Credential {
   type: string; // "PSA" | "NBI" | "NC2" etc.
+  name?: string;
   fileUrl: string;
   uploadedAt: Date;
 }

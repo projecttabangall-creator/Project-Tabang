@@ -15,16 +15,40 @@ import { doc, getDoc } from "firebase/firestore";
 import { firebaseAuth, firestore } from "@/config/firebase";
 import { UserRole } from "@tabang/shared";
 
+interface AvailabilitySlot {
+  dayOfWeek: number;
+  startTime: string;
+  endTime: string;
+}
+
+interface Credential {
+  type: string;
+  name?: string;
+  fileUrl: string;
+  uploadedAt: any;
+}
+
+interface WorkerData {
+  specialization: string;
+  credentials: Credential[];
+  averageRating: number;
+  completedJobsCount: number;
+  isAvailable: boolean;
+  availability: AvailabilitySlot[];
+}
+
 interface UserProfile {
   uid: string;
   role: UserRole;
   firstName: string;
   lastName: string;
   contactNumber: string;
+  email?: string;
   isVerified: boolean;
   accountStatus: string;
   creditPoints: number;
   profilePhotoUrl?: string;
+  workerData?: WorkerData;
 }
 
 interface AuthContextType {
@@ -55,10 +79,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       firstName: data.firstName,
       lastName: data.lastName,
       contactNumber: data.contactNumber,
+      email: data.email,
       isVerified: data.isVerified,
       accountStatus: data.accountStatus,
       creditPoints: data.creditPoints,
       profilePhotoUrl: data.profilePhotoUrl,
+      workerData: data.workerData,
     };
   }
 

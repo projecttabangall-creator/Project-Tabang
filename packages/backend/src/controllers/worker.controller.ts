@@ -1,14 +1,198 @@
 import { Response } from "express";
 import { AuthenticatedRequest } from "../middleware/auth";
 import { auth, db } from "../config/firebase";
-import adminSDK from "../config/firebase";
+import { FieldValue, GeoPoint, Timestamp } from "firebase-admin/firestore";
 import {
-  RegisterWorkerInput,
+  canUploadMultipleWorkerCredentials,
   DEFAULT_CREDIT_POINTS,
+  getWorkerCredentialLabel,
+  isWorkerCredentialType,
+  RegisterWorkerInput,
   ROLES,
 } from "@tabang/shared";
 
 const usersRef = db.collection("users");
+const CONTACT_ALREADY_REGISTERED_ERROR = "Contact number already registered";
+
+function buildAuthEmail(contactNumber: string): string {
+  return `${contactNumber.trim().replace(/\+/g, "")}@tabang.local`;
+}
+
+interface WorkerCredentialInput {
+  type: string;
+  name?: string;
+  fileUrl: string;
+  uploadedAt?: unknown;
+}
+
+function normalizeCredentialName(type: string, name?: string): string {
+  const trimmedName = name?.trim();
+  return trimmedName || getWorkerCredentialLabel(type);
+}
+
+function buildCredentialKey(credential: Partial<WorkerCredentialInput>): string {
+  return [
+    credential.type?.trim() || "",
+    normalizeCredentialName(credential.type?.trim() || "", credential.name),
+    credential.fileUrl?.trim() || "",
+  ].join("::");
+}
+
+function parseWorkerCredentials(
+  credentials: unknown,
+  existingCredentials: WorkerCredentialInput[] = []
+):
+  | {
+      ok: true;
+      credentials: Array<{
+        type: string;
+        name: string;
+        fileUrl: string;
+        uploadedAt: unknown;
+      }>;
+    }
+  | { ok: false; error: string } {
+  if (!Array.isArray(credentials)) {
+    return { ok: false, error: "credentials must be an array" };
+  }
+
+  const counts = new Map<string, number>();
+  const normalizedInputs: Array<{
+    type: string;
+    name: string;
+    fileUrl: string;
+  }> = [];
+
+  for (const credential of credentials) {
+    if (!credential || typeof credential !== "object") {
+      return { ok: false, error: "Each credential must be an object" };
+    }
+
+    const type =
+      typeof (credential as WorkerCredentialInput).type === "string"
+        ? (credential as WorkerCredentialInput).type.trim()
+        : "";
+    const fileUrl =
+      typeof (credential as WorkerCredentialInput).fileUrl === "string"
+        ? (credential as WorkerCredentialInput).fileUrl.trim()
+        : "";
+    const name = normalizeCredentialName(
+      type,
+      typeof (credential as WorkerCredentialInput).name === "string"
+        ? (credential as WorkerCredentialInput).name
+        : undefined
+    );
+
+    if (!type || !isWorkerCredentialType(type)) {
+      return { ok: false, error: "Invalid credential type" };
+    }
+
+    if (!fileUrl) {
+      return { ok: false, error: "Credential file URL is required" };
+    }
+
+    counts.set(type, (counts.get(type) || 0) + 1);
+    normalizedInputs.push({ type, name, fileUrl });
+  }
+
+  for (const [type, count] of counts) {
+    if (!canUploadMultipleWorkerCredentials(type) && count > 1) {
+      return {
+        ok: false,
+        error: `${getWorkerCredentialLabel(type)} can only be uploaded once`,
+      };
+    }
+  }
+
+  const existingByFullKey = new Map(
+    existingCredentials.map((credential) => [
+      buildCredentialKey(credential),
+      credential.uploadedAt,
+    ])
+  );
+  const existingByTypeAndUrl = new Map(
+    existingCredentials.map((credential) => [
+      `${credential.type?.trim() || ""}::${credential.fileUrl?.trim() || ""}`,
+      credential.uploadedAt,
+    ])
+  );
+
+  return {
+    ok: true,
+    credentials: normalizedInputs.map((credential) => {
+      const preservedUploadedAt =
+        existingByFullKey.get(buildCredentialKey(credential)) ??
+        existingByTypeAndUrl.get(
+          `${credential.type}::${credential.fileUrl}`
+        ) ??
+        Timestamp.now();
+
+      return {
+        ...credential,
+        uploadedAt: preservedUploadedAt,
+      };
+    }),
+  };
+}
+
+function buildWorkerUserData(
+  body: RegisterWorkerInput,
+  uid: string,
+  now: FirebaseFirestore.FieldValue,
+  credentials: Array<{
+    type: string;
+    name: string;
+    fileUrl: string;
+    uploadedAt: unknown;
+  }>
+) {
+  return {
+    uid,
+    role: ROLES.WORKER,
+    firstName: body.firstName,
+    lastName: body.lastName,
+    middleInitial: body.middleInitial || "",
+    birthday: body.birthday,
+    contactNumber: body.contactNumber.trim(),
+    email: body.email || "",
+    address: body.address,
+    creditPoints: DEFAULT_CREDIT_POINTS,
+    isVerified: false,
+    isActive: false,
+    accountStatus: "active",
+    otpVerified: false,
+    failedLoginAttempts: 0,
+    createdAt: now,
+    updatedAt: now,
+    termsAcceptedAt: body.termsAcceptedAt || null,
+    workerData: {
+      specialization: body.specialization,
+      credentials,
+      biometricEnrolled: body.biometricEnrolled || false,
+      averageRating: 0,
+      completedJobsCount: 0,
+      totalJobsAssigned: 0,
+      acceptanceRate: 0,
+      cancellationRate: 0,
+      reportsCount: 0,
+      lastAssignedAt: now,
+      location: new GeoPoint(0, 0),
+      availability: [],
+      isAvailable: false,
+    },
+  };
+}
+
+async function getAuthUserByEmail(email: string) {
+  try {
+    return await auth.getUserByEmail(email);
+  } catch (error: any) {
+    if (error.code === "auth/user-not-found") {
+      return null;
+    }
+    throw error;
+  }
+}
 
 /**
  * POST /api/workers/register
@@ -19,73 +203,147 @@ export async function registerWorker(
   res: Response
 ): Promise<void> {
   const body = req.body as RegisterWorkerInput;
+  const normalizedContactNumber = body.contactNumber.trim();
+  const email = buildAuthEmail(normalizedContactNumber);
+  const displayName = `${body.firstName} ${body.lastName}`;
+  const normalizedCredentials = parseWorkerCredentials(body.credentials || []);
+
+  if (!normalizedCredentials.ok) {
+    res.status(400).json({ error: normalizedCredentials.error });
+    return;
+  }
 
   try {
-    // Check if contact number already exists
-    const existing = await usersRef
-      .where("contactNumber", "==", body.contactNumber)
+    const existingFirestore = await usersRef
+      .where("contactNumber", "==", normalizedContactNumber)
       .limit(1)
       .get();
 
-    if (!existing.empty) {
-      res.status(409).json({ error: "Contact number already registered" });
+    if (!existingFirestore.empty) {
+      const existingDoc = existingFirestore.docs[0];
+      const existingData = existingDoc.data();
+
+      if (existingData.role !== ROLES.WORKER) {
+        res.status(409).json({ error: CONTACT_ALREADY_REGISTERED_ERROR });
+        return;
+      }
+
+      try {
+        await auth.getUser(existingDoc.id);
+        res.status(409).json({ error: CONTACT_ALREADY_REGISTERED_ERROR });
+        return;
+      } catch (error: any) {
+        if (error.code !== "auth/user-not-found") {
+          throw error;
+        }
+      }
+
+      const recreatedUser = await auth.createUser({
+        uid: existingDoc.id,
+        email,
+        password: body.password,
+        displayName,
+      });
+
+      await auth.setCustomUserClaims(recreatedUser.uid, { role: ROLES.WORKER });
+
+      const now = FieldValue.serverTimestamp();
+      await usersRef.doc(recreatedUser.uid).set(
+        {
+          ...buildWorkerUserData(
+            {
+              ...body,
+              contactNumber: normalizedContactNumber,
+            },
+            recreatedUser.uid,
+            now,
+            normalizedCredentials.credentials
+          ),
+          createdAt: existingData.createdAt || now,
+        },
+        { merge: true }
+      );
+
+      await db.collection("systemLogs").add({
+        action: "worker_registration_recovered",
+        performedBy: req.user!.uid,
+        targetUserId: recreatedUser.uid,
+        details: `Recovered missing Auth record for worker: ${body.firstName} ${body.lastName} (${body.specialization})`,
+        createdAt: now,
+      });
+
+      res.status(201).json({
+        uid: recreatedUser.uid,
+        firstName: body.firstName,
+        lastName: body.lastName,
+        specialization: body.specialization,
+        message: "Worker account recovered and updated. Pending verification.",
+      });
       return;
     }
 
-    // Create Firebase Auth user
-    const email = `${body.contactNumber.replace(/\+/g, "")}@tabang.local`;
-    const userRecord = await auth.createUser({
-      email,
-      password: body.password,
-      displayName: `${body.firstName} ${body.lastName}`,
-    });
+    let userRecord = null as Awaited<ReturnType<typeof auth.createUser>> | null;
+    let recoveredOrphanAuth = false;
 
-    // Set custom claims
+    try {
+      userRecord = await auth.createUser({
+        email,
+        password: body.password,
+        displayName,
+      });
+    } catch (error: any) {
+      if (error.code !== "auth/email-already-exists") {
+        throw error;
+      }
+
+      const existingAuthUser = await getAuthUserByEmail(email);
+      if (!existingAuthUser) {
+        throw error;
+      }
+
+      const linkedFirestoreDoc = await usersRef.doc(existingAuthUser.uid).get();
+      if (linkedFirestoreDoc.exists) {
+        res.status(409).json({ error: CONTACT_ALREADY_REGISTERED_ERROR });
+        return;
+      }
+
+      await auth.updateUser(existingAuthUser.uid, {
+        password: body.password,
+        displayName,
+      });
+
+      userRecord = existingAuthUser;
+      recoveredOrphanAuth = true;
+    }
+
+    if (!userRecord) {
+      throw new Error("Worker registration did not produce an auth user");
+    }
+
     await auth.setCustomUserClaims(userRecord.uid, { role: ROLES.WORKER });
 
-    // Create user document
-    const now = adminSDK.firestore.FieldValue.serverTimestamp();
-    await usersRef.doc(userRecord.uid).set({
-      uid: userRecord.uid,
-      role: ROLES.WORKER,
-      firstName: body.firstName,
-      lastName: body.lastName,
-      middleInitial: body.middleInitial || "",
-      birthday: body.birthday,
-      contactNumber: body.contactNumber,
-      email: body.email || "",
-      address: body.address,
-      creditPoints: DEFAULT_CREDIT_POINTS,
-      isVerified: false,
-      isActive: false, // Inactive until admin verifies
-      accountStatus: "active",
-      otpVerified: false,
-      failedLoginAttempts: 0,
-      createdAt: now,
-      updatedAt: now,
-      workerData: {
-        specialization: body.specialization,
-        credentials: [],
-        biometricEnrolled: false,
-        averageRating: 0,
-        completedJobsCount: 0,
-        totalJobsAssigned: 0,
-        acceptanceRate: 0,
-        cancellationRate: 0,
-        reportsCount: 0,
-        lastAssignedAt: now,
-        location: new adminSDK.firestore.GeoPoint(0, 0),
-        availability: [],
-        isAvailable: false,
-      },
-    });
+    const now = FieldValue.serverTimestamp();
+    await usersRef.doc(userRecord.uid).set(
+      buildWorkerUserData(
+        {
+          ...body,
+          contactNumber: normalizedContactNumber,
+        },
+        userRecord.uid,
+        now,
+        normalizedCredentials.credentials
+      )
+    );
 
-    // Log
     await db.collection("systemLogs").add({
-      action: "worker_registered",
+      action: recoveredOrphanAuth
+        ? "worker_registration_recovered"
+        : "worker_registered",
       performedBy: req.user!.uid,
       targetUserId: userRecord.uid,
-      details: `Registered worker: ${body.firstName} ${body.lastName} (${body.specialization})`,
+      details: recoveredOrphanAuth
+        ? `Recovered orphan Auth account for worker: ${body.firstName} ${body.lastName} (${body.specialization})`
+        : `Registered worker: ${body.firstName} ${body.lastName} (${body.specialization})`,
       createdAt: now,
     });
 
@@ -99,7 +357,7 @@ export async function registerWorker(
   } catch (error: any) {
     console.error("Register worker error:", error);
     if (error.code === "auth/email-already-exists") {
-      res.status(409).json({ error: "Contact number already registered" });
+      res.status(409).json({ error: CONTACT_ALREADY_REGISTERED_ERROR });
       return;
     }
     res.status(500).json({ error: "Failed to register worker" });
@@ -144,14 +402,12 @@ export async function listWorkers(
       };
     });
 
-    // Filter by category client-side (Firestore can't query nested fields + other where)
     if (category) {
       workers = workers.filter(
-        (w) => w.workerData?.specialization === category
+        (worker) => worker.workerData?.specialization === category
       );
     }
 
-    // Sort
     if (sortBy === "rating") {
       workers.sort(
         (a, b) =>
@@ -186,7 +442,6 @@ export async function getWorker(
   const id = req.params.id as string;
 
   try {
-    // Workers can only view their own profile; admin can view any
     if (req.user!.role === "worker" && req.user!.uid !== id) {
       res.status(403).json({ error: "Cannot view other worker profiles" });
       return;
@@ -227,7 +482,7 @@ export async function verifyWorker(
       return;
     }
 
-    const now = adminSDK.firestore.FieldValue.serverTimestamp();
+    const now = FieldValue.serverTimestamp();
     await docRef.update({
       isVerified: true,
       isActive: true,
@@ -276,7 +531,7 @@ export async function toggleAvailability(
     const current = doc.data()!.workerData?.isAvailable || false;
     await docRef.update({
       "workerData.isAvailable": !current,
-      updatedAt: adminSDK.firestore.FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
     });
 
     res.json({ isAvailable: !current });
@@ -305,13 +560,67 @@ export async function updateSchedule(
   try {
     await usersRef.doc(id).update({
       "workerData.availability": availability,
-      updatedAt: adminSDK.firestore.FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
     });
 
     res.json({ message: "Schedule updated", availability });
   } catch (error) {
     console.error("Update schedule error:", error);
     res.status(500).json({ error: "Failed to update schedule" });
+  }
+}
+
+/**
+ * PATCH /api/workers/:id/credentials
+ * Admin updates worker credentials (add/replace uploaded documents).
+ */
+export async function updateCredentials(
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> {
+  const id = req.params.id as string;
+  const { credentials } = req.body;
+
+  try {
+    const docRef = usersRef.doc(id);
+    const doc = await docRef.get();
+
+    if (!doc.exists || doc.data()!.role !== "worker") {
+      res.status(404).json({ error: "Worker not found" });
+      return;
+    }
+
+    const now = FieldValue.serverTimestamp();
+    const existingCredentials =
+      (doc.data()!.workerData?.credentials as WorkerCredentialInput[] | undefined) ||
+      [];
+    const parsedCredentials = parseWorkerCredentials(
+      credentials,
+      existingCredentials
+    );
+
+    if (!parsedCredentials.ok) {
+      res.status(400).json({ error: parsedCredentials.error });
+      return;
+    }
+
+    await docRef.update({
+      "workerData.credentials": parsedCredentials.credentials,
+      updatedAt: now,
+    });
+
+    await db.collection("systemLogs").add({
+      action: "worker_credentials_updated",
+      performedBy: req.user!.uid,
+      targetUserId: id,
+      details: `Updated credentials for worker: ${doc.data()!.firstName} ${doc.data()!.lastName}`,
+      createdAt: now,
+    });
+
+    res.json({ message: "Credentials updated" });
+  } catch (error) {
+    console.error("Update credentials error:", error);
+    res.status(500).json({ error: "Failed to update credentials" });
   }
 }
 
@@ -333,11 +642,8 @@ export async function updateLocation(
 
   try {
     await usersRef.doc(id).update({
-      "workerData.location": new adminSDK.firestore.GeoPoint(
-        latitude,
-        longitude
-      ),
-      updatedAt: adminSDK.firestore.FieldValue.serverTimestamp(),
+      "workerData.location": new GeoPoint(latitude, longitude),
+      updatedAt: FieldValue.serverTimestamp(),
     });
 
     res.json({ message: "Location updated" });

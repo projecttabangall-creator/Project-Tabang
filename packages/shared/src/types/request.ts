@@ -35,8 +35,13 @@ export interface ServiceRequest {
   minPrice: number; // snapshot from item at creation
   finalPrice?: number;
   priceChangeReason?: string;
+  pendingFinalPrice?: number;
+  pendingPriceChangeReason?: string;
   commission: number; // 10% of price
+  commissionPercent: number;
   totalForResident: number; // price + commission
+  pendingCommission?: number;
+  pendingTotalForResident?: number;
   location: {
     latitude: number;
     longitude: number;
@@ -50,6 +55,7 @@ export interface ServiceRequest {
   assignedWorkerName?: string;
   assignmentScore?: number;
   assignmentAttempts: number;
+  excludedWorkerIds?: string[];
 
   // Status
   status: RequestStatus;
@@ -60,6 +66,11 @@ export interface ServiceRequest {
   // Admin price override
   priceOverrideRequired: boolean;
   priceOverrideApproved?: boolean;
+  priceOverrideRequestedAt?: Date;
+  priceOverrideRequestedBy?: string;
+  priceOverrideReviewedAt?: Date;
+  priceOverrideReviewedBy?: string;
+  priceOverrideRejectedReason?: string;
 
   // Timestamps
   createdAt: Date;
@@ -80,4 +91,10 @@ export interface ServiceRequest {
   // Special request
   isSpecialRequest: boolean;
   specialRequestNote?: string;
+  createdByAdminId?: string;
+  beneficiary?: {
+    firstName: string;
+    lastName: string;
+    contactNumber: string;
+  };
 }

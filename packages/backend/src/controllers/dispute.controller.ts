@@ -1,12 +1,19 @@
 import { Response } from "express";
 import { AuthenticatedRequest } from "../middleware/auth";
 import { db } from "../config/firebase";
-import admin from "../config/firebase";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import {
-  REQUEST_STATUSES,
-  DISPUTE_STATUSES,
+  DEFAULT_COMMISSION_PERCENT,
   DISPUTE_DEADLINE_HOURS,
+  DISPUTE_FILING_WINDOW_HOURS,
+  DISPUTE_STATUSES,
+  REQUEST_STATUSES,
 } from "@tabang/shared";
+import { deductCredits } from "../services/credit.service";
+import {
+  calculateCommission,
+  calculateTotalForResident,
+} from "../services/pricing.service";
 
 interface FileDisputeBody {
   requestId: string;
@@ -21,10 +28,78 @@ interface ResolveDisputeBody {
   priceAdjustment?: number;
   creditDeductions: Array<{ userId: string; amount: number }>;
 }
-import { deductCredits, restoreCredits } from "../services/credit.service";
 
 const disputesRef = db.collection("disputes");
 const requestsRef = db.collection("serviceRequests");
+
+function toDate(value: any): Date | null {
+  if (!value) {
+    return null;
+  }
+
+  if (value instanceof Date) {
+    return value;
+  }
+
+  if (typeof value?.toDate === "function") {
+    return value.toDate();
+  }
+
+  if (typeof value?._seconds === "number") {
+    return new Date(value._seconds * 1000);
+  }
+
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function canFileDispute(requestData: FirebaseFirestore.DocumentData): {
+  allowed: boolean;
+  error?: string;
+} {
+  if (
+    [
+      REQUEST_STATUSES.IN_PROGRESS,
+      REQUEST_STATUSES.PRICE_CONFIRMED,
+    ].includes(requestData.status)
+  ) {
+    return { allowed: true };
+  }
+
+  if (
+    [
+      REQUEST_STATUSES.COMPLETED,
+      REQUEST_STATUSES.PAYMENT_SUBMITTED,
+      REQUEST_STATUSES.PAYMENT_CONFIRMED,
+    ].includes(requestData.status)
+  ) {
+    const completedAt = toDate(requestData.completedAt);
+    if (!completedAt) {
+      return {
+        allowed: false,
+        error: "Completed timestamp is missing for this request",
+      };
+    }
+
+    const deadline = new Date(
+      completedAt.getTime() + DISPUTE_FILING_WINDOW_HOURS * 60 * 60 * 1000
+    );
+
+    if (new Date() > deadline) {
+      return {
+        allowed: false,
+        error: "Disputes must be filed within 24 hours of completion",
+      };
+    }
+
+    return { allowed: true };
+  }
+
+  return {
+    allowed: false,
+    error: "Disputes can only be filed during active work or within 24 hours of completion",
+  };
+}
 
 /**
  * POST /api/disputes
@@ -38,7 +113,6 @@ export async function fileDispute(
   const body = req.body as FileDisputeBody;
 
   try {
-    // Get the request
     const requestDoc = await requestsRef.doc(body.requestId).get();
     if (!requestDoc.exists) {
       res.status(404).json({ error: "Request not found" });
@@ -47,7 +121,6 @@ export async function fileDispute(
 
     const requestData = requestDoc.data()!;
 
-    // Verify the user is part of the request
     const isResident = requestData.residentId === userId;
     const isWorker = requestData.assignedWorkerId === userId;
     if (!isResident && !isWorker) {
@@ -55,22 +128,14 @@ export async function fileDispute(
       return;
     }
 
-    // Check request is in a disputable state
-    const disputableStatuses = [
-      REQUEST_STATUSES.WORKER_ARRIVED,
-      REQUEST_STATUSES.PRICE_CONFIRMED,
-      REQUEST_STATUSES.IN_PROGRESS,
-      REQUEST_STATUSES.COMPLETED,
-      REQUEST_STATUSES.PAYMENT_SUBMITTED,
-      REQUEST_STATUSES.PAYMENT_CONFIRMED,
-    ];
-
-    if (!disputableStatuses.includes(requestData.status)) {
-      res.status(400).json({ error: "This request cannot be disputed at this stage" });
+    const disputeEligibility = canFileDispute(requestData);
+    if (!disputeEligibility.allowed) {
+      res.status(400).json({
+        error: disputeEligibility.error || "This request cannot be disputed at this stage",
+      });
       return;
     }
 
-    // Check for existing open dispute
     const existingDispute = await disputesRef
       .where("requestId", "==", body.requestId)
       .where("status", "!=", DISPUTE_STATUSES.RESOLVED)
@@ -100,21 +165,16 @@ export async function fileDispute(
       evidenceUrls: body.evidenceUrls || [],
       status: DISPUTE_STATUSES.OPEN,
       creditDeductions: [],
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      deadline: admin.firestore.Timestamp.fromDate(deadline),
+      createdAt: FieldValue.serverTimestamp(),
+      deadline: Timestamp.fromDate(deadline),
     });
 
-    // Update request status to under_dispute
     await requestsRef.doc(body.requestId).update({
       status: REQUEST_STATUSES.UNDER_DISPUTE,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
     });
 
-    // Notify admin
-    const admins = await db
-      .collection("users")
-      .where("role", "==", "admin")
-      .get();
+    const admins = await db.collection("users").where("role", "==", "admin").get();
     for (const adminDoc of admins.docs) {
       await db.collection("notifications").add({
         userId: adminDoc.id,
@@ -124,11 +184,10 @@ export async function fileDispute(
         referenceType: "dispute",
         referenceId: disputeRef.id,
         isRead: false,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        createdAt: FieldValue.serverTimestamp(),
       });
     }
 
-    // Notify the other party
     await db.collection("notifications").add({
       userId: filedAgainst,
       type: "dispute_filed",
@@ -137,7 +196,7 @@ export async function fileDispute(
       referenceType: "dispute",
       referenceId: disputeRef.id,
       isRead: false,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: FieldValue.serverTimestamp(),
     });
 
     await db.collection("systemLogs").add({
@@ -145,8 +204,8 @@ export async function fileDispute(
       performedBy: userId,
       targetRequestId: body.requestId,
       targetDisputeId: disputeRef.id,
-      details: `Dispute filed: ${body.disputeType} — ${body.description.slice(0, 100)}`,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      details: `Dispute filed: ${body.disputeType} - ${body.description.slice(0, 100)}`,
+      createdAt: FieldValue.serverTimestamp(),
     });
 
     res.status(201).json({
@@ -212,7 +271,6 @@ export async function getDispute(
 
     const data = doc.data()!;
 
-    // Access control: involved parties or admin
     if (
       userId !== data.filedBy &&
       userId !== data.filedAgainst &&
@@ -222,7 +280,6 @@ export async function getDispute(
       return;
     }
 
-    // Get the linked request data for context
     const requestDoc = await requestsRef.doc(data.requestId).get();
     const requestData = requestDoc.exists ? requestDoc.data() : null;
 
@@ -262,9 +319,7 @@ export async function resolveDispute(
       return;
     }
 
-    const now = admin.firestore.FieldValue.serverTimestamp();
-
-    // Apply credit deductions
+    const now = FieldValue.serverTimestamp();
     const deductionResults: Array<{
       userId: string;
       amount: number;
@@ -286,24 +341,34 @@ export async function resolveDispute(
       });
     }
 
-    // Update dispute
     await disputesRef.doc(disputeId).update({
       status: DISPUTE_STATUSES.RESOLVED,
       resolution: body.resolution,
       resolutionNotes: body.resolutionNotes,
-      priceAdjustment: body.priceAdjustment || null,
+      priceAdjustment: body.priceAdjustment ?? null,
       creditDeductions: body.creditDeductions,
       resolvedBy: adminId,
       resolvedAt: now,
     });
 
-    // Determine what status to restore the request to
     let restoreStatus: string = REQUEST_STATUSES.RESOLVED;
     if (body.priceAdjustment !== undefined) {
-      // Price was adjusted — mark request as completed again so payment can proceed
+      const requestDoc = await requestsRef.doc(dispute.requestId).get();
+      const requestData = requestDoc.data() || {};
+      const commissionPercent =
+        typeof requestData.commissionPercent === "number"
+          ? requestData.commissionPercent
+          : DEFAULT_COMMISSION_PERCENT;
+
       await requestsRef.doc(dispute.requestId).update({
         status: REQUEST_STATUSES.COMPLETED,
         finalPrice: body.priceAdjustment,
+        commission: calculateCommission(body.priceAdjustment, commissionPercent),
+        totalForResident: calculateTotalForResident(
+          body.priceAdjustment,
+          commissionPercent
+        ),
+        priceOverrideRequired: false,
         updatedAt: now,
       });
       restoreStatus = REQUEST_STATUSES.COMPLETED;
@@ -314,7 +379,6 @@ export async function resolveDispute(
       });
     }
 
-    // Notify both parties
     const notifyUsers = [dispute.filedBy, dispute.filedAgainst];
     for (const uid of notifyUsers) {
       await db.collection("notifications").add({

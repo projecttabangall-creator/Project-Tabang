@@ -3,6 +3,7 @@ import { useForm } from "react-hook-form";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import api from "@/services/api";
+import { BackButton } from "@/components/common/BackButton";
 
 interface RegisterForm {
   firstName: string;
@@ -26,7 +27,11 @@ export function Register() {
     handleSubmit,
     watch,
     formState: { errors },
-  } = useForm<RegisterForm>();
+  } = useForm<RegisterForm>({
+    defaultValues: {
+      barangay: "Banilad",
+    },
+  });
 
   const password = watch("password");
 
@@ -67,11 +72,12 @@ export function Register() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 py-8">
+    <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4 py-8">
       <div className="w-full max-w-md">
+        <BackButton to="/" label="Back" />
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-primary-700">Tabang</h1>
-          <p className="text-gray-500 mt-2">Create your account</p>
+          <p className="text-slate-500 mt-2">Create your account</p>
         </div>
 
         <div className="card">
@@ -140,6 +146,7 @@ export function Register() {
                 type="tel"
                 placeholder="09171234567"
                 className="input-field"
+                autoComplete="tel"
                 {...register("contactNumber", {
                   required: "Required",
                   pattern: {
@@ -158,28 +165,58 @@ export function Register() {
             {/* Address */}
             <fieldset className="space-y-3">
               <legend className="label">Barangay Address</legend>
-              <input
-                placeholder="Street"
-                className="input-field"
-                {...register("street", { required: "Street is required" })}
-              />
-              <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label htmlFor="street" className="label">
+                  Street
+                </label>
                 <input
-                  placeholder="House/Lot No."
+                  id="street"
+                  placeholder="Street"
                   className="input-field"
-                  {...register("houseLot", { required: "Required" })}
-                />
-                <input
-                  placeholder="Block No. (optional)"
-                  className="input-field"
-                  {...register("blockNo")}
+                  autoComplete="address-line1"
+                  {...register("street", { required: "Street is required" })}
                 />
               </div>
-              <input
-                placeholder="Barangay"
-                className="input-field"
-                {...register("barangay", { required: "Barangay is required" })}
-              />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label htmlFor="houseLot" className="label">
+                    House/Lot No.
+                  </label>
+                  <input
+                    id="houseLot"
+                    placeholder="House/Lot No."
+                    className="input-field"
+                    autoComplete="address-line2"
+                    {...register("houseLot", { required: "Required" })}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="blockNo" className="label">
+                    Block No.
+                  </label>
+                  <input
+                    id="blockNo"
+                    placeholder="Block No. (optional)"
+                    className="input-field"
+                    autoComplete="off"
+                    {...register("blockNo")}
+                  />
+                </div>
+              </div>
+              <div>
+                <label htmlFor="barangay" className="label">
+                  Barangay
+                </label>
+                <input
+                  id="barangay"
+                  placeholder="Barangay"
+                  className="input-field"
+                  autoComplete="address-level4"
+                  {...register("barangay", {
+                    required: "Barangay is required",
+                  })}
+                />
+              </div>
             </fieldset>
 
             {/* Password */}
@@ -231,7 +268,7 @@ export function Register() {
             </button>
           </form>
 
-          <div className="mt-6 pt-6 border-t border-gray-200 text-center text-sm text-gray-500">
+          <div className="mt-6 pt-6 border-t border-slate-200 text-center text-sm text-slate-500">
             Already have an account?{" "}
             <Link
               to="/login"

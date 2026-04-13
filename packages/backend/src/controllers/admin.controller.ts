@@ -1,7 +1,7 @@
 import { Response } from "express";
 import { AuthenticatedRequest } from "../middleware/auth";
 import { db } from "../config/firebase";
-import adminSDK from "../config/firebase";
+import { FieldValue } from "firebase-admin/firestore";
 
 const usersRef = db.collection("users");
 
@@ -14,60 +14,50 @@ export async function getDashboardStats(
   res: Response
 ): Promise<void> {
   try {
-    const [residents, workers, requests, disputes, payments] =
+    const [residentSnapshot, workerSnapshot, requestSnapshot, disputeSnapshot, paymentSnapshot] =
       await Promise.all([
-        usersRef.where("role", "==", "resident").count().get(),
-        usersRef.where("role", "==", "worker").count().get(),
-        db.collection("serviceRequests").count().get(),
-        db
-          .collection("disputes")
-          .where("status", "!=", "resolved")
-          .count()
-          .get(),
-        db
-          .collection("payments")
-          .where("status", "==", "pending")
-          .count()
-          .get(),
+        usersRef.where("role", "==", "resident").get(),
+        usersRef.where("role", "==", "worker").get(),
+        db.collection("serviceRequests").get(),
+        db.collection("disputes").get(),
+        db.collection("payments").get(),
       ]);
 
-    // Pending worker verifications
-    const pendingVerifications = await usersRef
-      .where("role", "==", "worker")
-      .where("isVerified", "==", false)
-      .count()
-      .get();
-
-    // Active requests
-    const activeRequests = await db
-      .collection("serviceRequests")
-      .where("status", "in", [
+    const totalResidents = residentSnapshot.size;
+    const totalWorkers = workerSnapshot.size;
+    const totalRequests = requestSnapshot.size;
+    const pendingVerifications = workerSnapshot.docs.filter(
+      (doc) => doc.data().isVerified === false
+    ).length;
+    const activeRequests = requestSnapshot.docs.filter((doc) =>
+      [
         "pending",
         "assigned",
         "accepted",
         "worker_arrived",
         "price_confirmed",
         "in_progress",
-      ])
-      .count()
-      .get();
-
-    // Completed jobs
-    const completedJobs = await db
-      .collection("serviceRequests")
-      .where("status", "==", "payment_confirmed")
-      .count()
-      .get();
+      ].includes(doc.data().status)
+    ).length;
+    const completedJobs = requestSnapshot.docs.filter(
+      (doc) => doc.data().status === "payment_confirmed"
+    ).length;
+    const pendingPayments = paymentSnapshot.docs.filter(
+      (doc) => doc.data().status === "pending"
+    ).length;
+    const openDisputes = disputeSnapshot.docs.filter(
+      (doc) => doc.data().status !== "resolved"
+    ).length;
 
     res.json({
-      totalResidents: residents.data().count,
-      totalWorkers: workers.data().count,
-      pendingVerifications: pendingVerifications.data().count,
-      totalRequests: requests.data().count,
-      activeRequests: activeRequests.data().count,
-      completedJobs: completedJobs.data().count,
-      pendingPayments: payments.data().count,
-      openDisputes: disputes.data().count,
+      totalResidents,
+      totalWorkers,
+      pendingVerifications,
+      totalRequests,
+      activeRequests,
+      completedJobs,
+      pendingPayments,
+      openDisputes,
     });
   } catch (error) {
     console.error("Dashboard stats error:", error);
@@ -141,7 +131,7 @@ export async function updateUserStatus(
       return;
     }
 
-    const now = adminSDK.firestore.FieldValue.serverTimestamp();
+    const now = FieldValue.serverTimestamp();
     await docRef.update({
       accountStatus,
       isActive: accountStatus === "active",
@@ -188,7 +178,7 @@ export async function adjustCreditPoints(
       return;
     }
 
-    const now = adminSDK.firestore.FieldValue.serverTimestamp();
+    const now = FieldValue.serverTimestamp();
     const oldCredits = doc.data()!.creditPoints;
 
     await docRef.update({
@@ -283,7 +273,7 @@ export async function updateConfig(
       action: "config_updated",
       performedBy: req.user!.uid,
       details: "System configuration updated",
-      createdAt: adminSDK.firestore.FieldValue.serverTimestamp(),
+      createdAt: FieldValue.serverTimestamp(),
     });
 
     res.json({ message: "Configuration updated" });
@@ -291,6 +281,103 @@ export async function updateConfig(
     console.error("Update config error:", error);
     res.status(500).json({ error: "Failed to update config" });
   }
+}
+
+/**
+ * GET /api/admin/income
+ * Aggregated income stats from confirmed payments.
+ * Query params: period = "daily" | "weekly" | "monthly" (default "monthly")
+ */
+export async function getIncomeStats(
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> {
+  try {
+    const period = (req.query.period as string) || "monthly";
+
+    if (!["daily", "weekly", "monthly"].includes(period)) {
+      res.status(400).json({ error: "Invalid period. Use daily, weekly, or monthly." });
+      return;
+    }
+
+    const snapshot = await db
+      .collection("payments")
+      .where("status", "==", "confirmed")
+      .orderBy("confirmedAt", "desc")
+      .get();
+
+    let totalIncome = 0;
+    let totalWorkerPayouts = 0;
+    let totalCollected = 0;
+    let totalTransactions = 0;
+
+    const buckets: Record<
+      string,
+      { income: number; workerPayouts: number; totalCollected: number; transactions: number }
+    > = {};
+
+    for (const doc of snapshot.docs) {
+      const data = doc.data();
+      const commission = data.commissionAmount || 0;
+      const workerAmount = data.workerAmount || 0;
+      const total = data.totalAmount || 0;
+
+      totalIncome += commission;
+      totalWorkerPayouts += workerAmount;
+      totalCollected += total;
+      totalTransactions++;
+
+      // Get the confirmedAt date
+      const confirmedAt = data.confirmedAt?.toDate?.() ?? new Date(data.confirmedAt);
+      if (isNaN(confirmedAt.getTime())) continue;
+
+      const key = getBucketKey(confirmedAt, period);
+
+      if (!buckets[key]) {
+        buckets[key] = { income: 0, workerPayouts: 0, totalCollected: 0, transactions: 0 };
+      }
+      buckets[key].income += commission;
+      buckets[key].workerPayouts += workerAmount;
+      buckets[key].totalCollected += total;
+      buckets[key].transactions++;
+    }
+
+    // Convert buckets to sorted array (most recent first)
+    const breakdown = Object.entries(buckets)
+      .map(([label, stats]) => ({ label, ...stats }))
+      .sort((a, b) => b.label.localeCompare(a.label));
+
+    res.json({
+      period,
+      summary: { totalIncome, totalWorkerPayouts, totalCollected, totalTransactions },
+      breakdown,
+    });
+  } catch (error) {
+    console.error("Income stats error:", error);
+    res.status(500).json({ error: "Failed to fetch income stats" });
+  }
+}
+
+function getBucketKey(date: Date, period: string): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+
+  if (period === "daily") {
+    return `${y}-${m}-${d}`;
+  }
+  if (period === "weekly") {
+    // ISO week: find Monday of the week
+    const day = date.getDay();
+    const diff = date.getDate() - day + (day === 0 ? -6 : 1);
+    const monday = new Date(date);
+    monday.setDate(diff);
+    const wm = String(monday.getMonth() + 1).padStart(2, "0");
+    const wd = String(monday.getDate()).padStart(2, "0");
+    return `${monday.getFullYear()}-${wm}-${wd}`;
+  }
+  // monthly
+  return `${y}-${m}`;
 }
 
 /**

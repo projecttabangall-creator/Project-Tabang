@@ -3,6 +3,7 @@ import { useForm } from "react-hook-form";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import { BackButton } from "@/components/common/BackButton";
 
 interface LoginForm {
   contactNumber: string;
@@ -41,12 +42,13 @@ export function Login() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+    <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
       <div className="w-full max-w-md">
+        <BackButton to="/" label="Back" />
         {/* Logo/Brand */}
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-primary-700">Tabang</h1>
-          <p className="text-gray-500 mt-2">Community Service Booking Platform</p>
+          <p className="text-slate-500 mt-2">Community Service Booking Platform</p>
         </div>
 
         {/* Login Card */}
@@ -108,7 +110,7 @@ export function Login() {
             </Link>
           </div>
 
-          <div className="mt-6 pt-6 border-t border-gray-200 text-center text-sm text-gray-500">
+          <div className="mt-6 pt-6 border-t border-slate-200 text-center text-sm text-slate-500">
             Don't have an account?{" "}
             <Link
               to="/register"

@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
-import { DollarSign, CheckCircle, XCircle, ExternalLink } from "lucide-react";
+import { CheckCircle, XCircle, ExternalLink } from "lucide-react";
 import api from "@/services/api";
+import { BackButton } from "@/components/common/BackButton";
 
 interface Payment {
   id: string;
@@ -95,20 +96,21 @@ export function PaymentReview() {
 
   return (
     <div className="space-y-6">
+      <BackButton to="/admin/dashboard" label="Back to Dashboard" />
       <div>
         <h2 className="text-2xl font-bold flex items-center gap-2">
-          <DollarSign size={24} /> Payment Review
+          <span className="text-2xl">₱</span> Payment Review
         </h2>
-        <p className="text-gray-600 mt-1">
+        <p className="text-slate-600 mt-1">
           {payments.length} payment{payments.length !== 1 ? "s" : ""} pending review
         </p>
       </div>
 
       {payments.length === 0 ? (
         <div className="card text-center py-12">
-          <CheckCircle size={48} className="mx-auto text-green-300 mb-4" />
-          <p className="text-gray-500 font-medium">All caught up!</p>
-          <p className="text-sm text-gray-400 mt-2">
+          <CheckCircle size={48} className="mx-auto text-emerald-300 mb-4" />
+          <p className="text-slate-500 font-medium">All caught up!</p>
+          <p className="text-sm text-slate-400 mt-2">
             No payments pending review
           </p>
         </div>
@@ -120,7 +122,7 @@ export function PaymentReview() {
               <div className="flex items-start justify-between">
                 <div>
                   <p className="font-semibold">Payment #{payment.id.slice(-6)}</p>
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs text-slate-500">
                     Request: {payment.requestId.slice(-8)}
                   </p>
                 </div>
@@ -131,16 +133,16 @@ export function PaymentReview() {
 
               {/* Amounts */}
               <div className="grid grid-cols-3 gap-3">
-                <div className="bg-gray-50 rounded-lg p-3 text-center">
-                  <p className="text-xs text-gray-600">Worker</p>
+                <div className="bg-slate-50 rounded-lg p-3 text-center">
+                  <p className="text-xs text-slate-600">Worker</p>
                   <p className="font-bold">₱{payment.workerAmount}</p>
                 </div>
-                <div className="bg-gray-50 rounded-lg p-3 text-center">
-                  <p className="text-xs text-gray-600">Commission</p>
-                  <p className="font-bold text-green-600">₱{payment.commissionAmount}</p>
+                <div className="bg-slate-50 rounded-lg p-3 text-center">
+                  <p className="text-xs text-slate-600">Commission</p>
+                  <p className="font-bold text-emerald-600">₱{payment.commissionAmount}</p>
                 </div>
                 <div className="bg-primary-50 rounded-lg p-3 text-center">
-                  <p className="text-xs text-gray-600">Total</p>
+                  <p className="text-xs text-slate-600">Total</p>
                   <p className="font-bold text-primary-600">₱{payment.totalAmount}</p>
                 </div>
               </div>
@@ -148,12 +150,12 @@ export function PaymentReview() {
               {/* Info */}
               <div className="text-sm space-y-1">
                 <p>
-                  <span className="text-gray-600">Method:</span>{" "}
+                  <span className="text-slate-600">Method:</span>{" "}
                   <span className="font-medium uppercase">{payment.paymentMethod}</span>
                 </p>
                 <p>
-                  <span className="text-gray-600">Barangay Share:</span>{" "}
-                  <span className="font-medium text-green-600">₱{payment.barangayShareAmount}</span>
+                  <span className="text-slate-600">Barangay Share:</span>{" "}
+                  <span className="font-medium text-emerald-600">₱{payment.barangayShareAmount}</span>
                 </p>
               </div>
 
@@ -162,14 +164,14 @@ export function PaymentReview() {
                 href={payment.proofUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 font-medium"
+                className="flex items-center gap-2 text-sm text-primary-600 hover:text-primary-800 font-medium"
               >
                 <ExternalLink size={14} />
                 View Payment Proof
               </a>
 
               {/* Actions */}
-              <div className="flex gap-2 pt-2 border-t border-gray-100">
+              <div className="flex gap-2 pt-2 border-t border-slate-100">
                 <button
                   onClick={() => handleConfirm(payment.id)}
                   disabled={actionPaymentId === payment.id}
@@ -197,7 +199,7 @@ export function PaymentReview() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl p-6 max-w-md w-full space-y-4">
             <h3 className="font-semibold text-lg">Reject Payment</h3>
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-slate-600">
               Payment #{selectedPayment.id.slice(-6)} — ₱{selectedPayment.totalAmount}
             </p>
             <div>
@@ -222,7 +224,7 @@ export function PaymentReview() {
                   setShowRejectModal(false);
                   setSelectedPayment(null);
                 }}
-                className="flex-1 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-lg transition-colors"
+                className="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium rounded-lg transition-colors"
               >
                 Cancel
               </button>

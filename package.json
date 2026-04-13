@@ -15,6 +15,7 @@
     "build:backend": "npm run build -w packages/backend",
     "build:frontend": "npm run build -w packages/frontend",
     "build": "npm run build:shared && npm run build:backend && npm run build:frontend",
+    "seed": "node scripts/seed-emulators.js",
     "emulators": "firebase emulators:start",
     "deploy": "npm run build && firebase deploy"
   },

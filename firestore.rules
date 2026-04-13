@@ -2,96 +2,93 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // Helper: Check if user is authenticated
     function isAuthenticated() {
       return request.auth != null;
     }
 
-    // Helper: Check user role from custom claims
-    function hasRole(role) {
-      return isAuthenticated() && request.auth.token.role == role;
-    }
-
-    // Helper: Check if user is the document owner
     function isOwner(userId) {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
-    // Users collection
-    match /users/{userId} {
-      allow read: if isAuthenticated() && (isOwner(userId) || hasRole('admin'));
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated() && (isOwner(userId) || hasRole('admin'));
-      allow delete: if hasRole('admin');
+    function isAdminUser() {
+      return isAuthenticated() && (
+        request.auth.token.role == 'admin' ||
+        (
+          exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+        )
+      );
     }
 
-    // Categories collection
+    function isNotificationOwner() {
+      return isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    function isNotificationReadUpdate() {
+      return request.resource.data.userId == resource.data.userId &&
+        request.resource.data.diff(resource.data).changedKeys().hasOnly(['isRead']);
+    }
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdminUser();
+      allow create, update, delete: if false;
+    }
+
     match /categories/{categoryId} {
       allow read: if isAuthenticated();
-      allow write: if hasRole('admin');
+      allow write: if isAdminUser();
 
-      // Category items subcollection
       match /items/{itemId} {
         allow read: if isAuthenticated();
-        allow write: if hasRole('admin');
+        allow write: if isAdminUser();
       }
     }
 
-    // Service requests collection
     match /serviceRequests/{requestId} {
       allow read: if isAuthenticated() && (
         resource.data.residentId == request.auth.uid ||
         resource.data.assignedWorkerId == request.auth.uid ||
-        hasRole('admin')
+        isAdminUser()
       );
-      allow create: if isAuthenticated() && (hasRole('resident') || hasRole('admin'));
-      allow update: if isAuthenticated(); // Fine-grained control in backend API
-      allow delete: if false; // Never delete requests
+      allow create, update, delete: if false;
     }
 
-    // Disputes collection
     match /disputes/{disputeId} {
       allow read: if isAuthenticated() && (
         resource.data.filedBy == request.auth.uid ||
         resource.data.filedAgainst == request.auth.uid ||
-        hasRole('admin')
+        isAdminUser()
       );
-      allow create: if isAuthenticated();
-      allow update: if hasRole('admin');
-      allow delete: if false;
+      allow create, update, delete: if false;
     }
 
-    // Payments collection
     match /payments/{paymentId} {
       allow read: if isAuthenticated() && (
         resource.data.residentId == request.auth.uid ||
         resource.data.workerId == request.auth.uid ||
-        hasRole('admin')
+        isAdminUser()
       );
-      allow create: if isAuthenticated();
-      allow update: if hasRole('admin');
-      allow delete: if false;
+      allow create, update, delete: if false;
     }
 
-    // Notifications collection
     match /notifications/{notificationId} {
-      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
-      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
-      allow create: if false; // Only created by backend
-      allow delete: if false;
+      allow read: if isNotificationOwner();
+      allow update: if isNotificationOwner() && isNotificationReadUpdate();
+      allow create, delete: if false;
     }
 
-    // System config — admin only
     match /systemConfig/{configId} {
-      allow read: if isAuthenticated();
-      allow write: if hasRole('admin');
+      allow read: if isAdminUser();
+      allow write: if false;
     }
 
-    // System logs — admin read only, backend writes
     match /systemLogs/{logId} {
-      allow read: if hasRole('admin');
-      allow write: if false; // Only backend writes logs
+      allow read: if isAdminUser();
+      allow write: if false;
+    }
+
+    match /otps/{otpId} {
+      allow read, write: if false;
     }
   }
 }

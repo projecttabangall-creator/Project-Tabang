@@ -1,8 +1,12 @@
 import axios from "axios";
 import { firebaseAuth } from "@/config/firebase";
 
+const projectId = import.meta.env.VITE_FIREBASE_PROJECT_ID;
+
 const api = axios.create({
-  baseURL: import.meta.env.DEV ? "http://localhost:5001" : "",
+  baseURL: import.meta.env.DEV
+    ? `http://localhost:5001/${projectId}/us-central1/api`
+    : "",
   headers: {
     "Content-Type": "application/json",
   },

@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
+import { BackButton } from "@/components/common/BackButton";
 import {
   AlertTriangle,
   CheckCircle,
@@ -118,12 +119,12 @@ export function DisputeReview() {
   const getTypeBadgeColor = (type: string) => {
     const colors: Record<string, string> = {
       work_quality: "bg-orange-50 text-orange-700",
-      payment: "bg-green-50 text-green-700",
+      payment: "bg-emerald-50 text-emerald-700",
       no_show: "bg-red-50 text-red-700",
       behavior_safety: "bg-purple-50 text-purple-700",
-      other: "bg-gray-50 text-gray-700",
+      other: "bg-slate-50 text-slate-700",
     };
-    return colors[type] || "bg-gray-50 text-gray-700";
+    return colors[type] || "bg-slate-50 text-slate-700";
   };
 
   if (isLoading) {
@@ -136,11 +137,12 @@ export function DisputeReview() {
 
   return (
     <div className="space-y-6">
+      <BackButton to="/admin/dashboard" label="Back to Dashboard" />
       <div>
         <h2 className="text-2xl font-bold flex items-center gap-2">
           <AlertTriangle size={24} /> Dispute Review
         </h2>
-        <p className="text-gray-600 mt-1">
+        <p className="text-slate-600 mt-1">
           Review and resolve filed disputes
         </p>
       </div>
@@ -154,7 +156,7 @@ export function DisputeReview() {
             className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
               statusFilter === status
                 ? "bg-primary-600 text-white"
-                : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"
+                : "bg-white border border-slate-200 text-slate-700 hover:bg-slate-50"
             }`}
           >
             {status.replace(/_/g, " ").toUpperCase()}
@@ -165,9 +167,9 @@ export function DisputeReview() {
       {/* Disputes List */}
       {disputes.length === 0 ? (
         <div className="card text-center py-12">
-          <CheckCircle size={48} className="mx-auto text-green-300 mb-4" />
-          <p className="text-gray-500 font-medium">No disputes found</p>
-          <p className="text-sm text-gray-400 mt-2">
+          <CheckCircle size={48} className="mx-auto text-emerald-300 mb-4" />
+          <p className="text-slate-500 font-medium">No disputes found</p>
+          <p className="text-sm text-slate-400 mt-2">
             No {statusFilter.replace(/_/g, " ")} disputes at this time
           </p>
         </div>
@@ -194,7 +196,7 @@ export function DisputeReview() {
                         {dispute.disputeType.replace(/_/g, " ")}
                       </span>
                     </div>
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-slate-500">
                       Request: {dispute.requestId.slice(-8)}
                     </p>
                   </div>
@@ -205,24 +207,24 @@ export function DisputeReview() {
                           ? "bg-red-50 text-red-700"
                           : dispute.status === "under_review"
                           ? "bg-yellow-50 text-yellow-700"
-                          : "bg-green-50 text-green-700"
+                          : "bg-emerald-50 text-emerald-700"
                       }`}
                     >
                       {dispute.status.replace(/_/g, " ").toUpperCase()}
                     </span>
                     {expandedId === dispute.id ? (
-                      <ChevronUp size={18} className="text-gray-400" />
+                      <ChevronUp size={18} className="text-slate-400" />
                     ) : (
-                      <ChevronDown size={18} className="text-gray-400" />
+                      <ChevronDown size={18} className="text-slate-400" />
                     )}
                   </div>
                 </div>
 
-                <p className="text-sm text-gray-700 line-clamp-2">
+                <p className="text-sm text-slate-700 line-clamp-2">
                   {dispute.description}
                 </p>
 
-                <div className="flex gap-4 mt-2 text-xs text-gray-500">
+                <div className="flex gap-4 mt-2 text-xs text-slate-500">
                   <span>Filed by: {dispute.filedBy.slice(-6)}</span>
                   <span>Against: {dispute.filedAgainst.slice(-6)}</span>
                 </div>
@@ -230,25 +232,25 @@ export function DisputeReview() {
 
               {/* Expanded Detail + Resolution Form */}
               {expandedId === dispute.id && (
-                <div className="mt-4 pt-4 border-t border-gray-200 space-y-4">
+                <div className="mt-4 pt-4 border-t border-slate-200 space-y-4">
                   {/* Full Description */}
                   <div>
                     <h4 className="text-sm font-semibold mb-1">
                       Full Description
                     </h4>
-                    <p className="text-sm text-gray-700">{dispute.description}</p>
+                    <p className="text-sm text-slate-700">{dispute.description}</p>
                   </div>
 
                   {/* Parties */}
                   <div className="grid grid-cols-2 gap-3">
-                    <div className="bg-gray-50 rounded-lg p-3">
-                      <p className="text-xs text-gray-600">Filed By</p>
+                    <div className="bg-slate-50 rounded-lg p-3">
+                      <p className="text-xs text-slate-600">Filed By</p>
                       <p className="text-sm font-medium font-mono">
                         {dispute.filedBy.slice(-8)}
                       </p>
                     </div>
-                    <div className="bg-gray-50 rounded-lg p-3">
-                      <p className="text-xs text-gray-600">Filed Against</p>
+                    <div className="bg-slate-50 rounded-lg p-3">
+                      <p className="text-xs text-slate-600">Filed Against</p>
                       <p className="text-sm font-medium font-mono">
                         {dispute.filedAgainst.slice(-8)}
                       </p>
@@ -266,7 +268,7 @@ export function DisputeReview() {
                             href={url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800"
+                            className="flex items-center gap-2 text-sm text-primary-600 hover:text-primary-800"
                           >
                             <ExternalLink size={14} />
                             Evidence {i + 1}
@@ -278,17 +280,17 @@ export function DisputeReview() {
 
                   {/* Resolution (if already resolved) */}
                   {dispute.status === "resolved" && dispute.resolution && (
-                    <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                      <h4 className="text-sm font-semibold text-green-800 mb-2">
+                    <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
+                      <h4 className="text-sm font-semibold text-emerald-800 mb-2">
                         Resolution
                       </h4>
-                      <p className="text-sm text-green-700">
+                      <p className="text-sm text-emerald-700">
                         <strong>
                           {dispute.resolution.replace(/_/g, " ").toUpperCase()}
                         </strong>
                       </p>
                       {dispute.resolutionNotes && (
-                        <p className="text-sm text-green-700 mt-1">
+                        <p className="text-sm text-emerald-700 mt-1">
                           {dispute.resolutionNotes}
                         </p>
                       )}
@@ -297,7 +299,7 @@ export function DisputeReview() {
 
                   {/* Resolution Form (for open/under_review) */}
                   {dispute.status !== "resolved" && (
-                    <div className="bg-gray-50 rounded-lg p-4 space-y-4">
+                    <div className="bg-slate-50 rounded-lg p-4 space-y-4">
                       <h4 className="font-semibold">Resolve This Dispute</h4>
 
                       {/* Resolution Type */}
@@ -340,7 +342,7 @@ export function DisputeReview() {
                           value={priceAdjustment}
                           onChange={(e) => setPriceAdjustment(e.target.value)}
                         />
-                        <p className="text-xs text-gray-500 mt-1">
+                        <p className="text-xs text-slate-500 mt-1">
                           Leave empty if no price change needed
                         </p>
                       </div>
@@ -350,7 +352,7 @@ export function DisputeReview() {
                         <label className="label">Credit Deductions</label>
                         <div className="grid grid-cols-2 gap-3">
                           <div>
-                            <p className="text-xs text-gray-600 mb-1">
+                            <p className="text-xs text-slate-600 mb-1">
                               Filer ({dispute.filedBy.slice(-6)})
                             </p>
                             <select
@@ -367,7 +369,7 @@ export function DisputeReview() {
                             </select>
                           </div>
                           <div>
-                            <p className="text-xs text-gray-600 mb-1">
+                            <p className="text-xs text-slate-600 mb-1">
                               Accused ({dispute.filedAgainst.slice(-6)})
                             </p>
                             <select
@@ -384,7 +386,7 @@ export function DisputeReview() {
                             </select>
                           </div>
                         </div>
-                        <p className="text-xs text-gray-500 mt-1">
+                        <p className="text-xs text-slate-500 mt-1">
                           Users with 2 or fewer credits will be automatically suspended
                         </p>
                       </div>

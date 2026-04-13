@@ -10,6 +10,9 @@ import {
   Clock,
   Database,
   UserPlus,
+  HeartHandshake,
+  ScrollText,
+  List,
 } from "lucide-react";
 import api from "@/services/api";
 
@@ -42,13 +45,13 @@ export function AdminDashboard() {
           label: "Total Residents",
           value: stats.totalResidents,
           icon: Users,
-          color: "text-blue-600 bg-blue-50",
+          color: "text-primary-600 bg-primary-50",
         },
         {
           label: "Total Workers",
           value: stats.totalWorkers,
           icon: Wrench,
-          color: "text-green-600 bg-green-50",
+          color: "text-emerald-600 bg-emerald-50",
         },
         {
           label: "Pending Verifications",
@@ -82,7 +85,7 @@ export function AdminDashboard() {
 
   return (
     <div>
-      <h2 className="text-2xl font-bold mb-6">Admin Dashboard</h2>
+      <h2 className="page-title mb-6">Admin Dashboard</h2>
 
       {loading ? (
         <div className="flex justify-center py-12">
@@ -100,7 +103,7 @@ export function AdminDashboard() {
                   </div>
                   <div>
                     <p className="text-2xl font-bold">{stat.value}</p>
-                    <p className="text-xs text-gray-500">{stat.label}</p>
+                    <p className="text-xs text-slate-500">{stat.label}</p>
                   </div>
                 </div>
               );
@@ -119,14 +122,14 @@ export function AdminDashboard() {
           {stats && (
             <div className="card mb-8 flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-500">Completed Jobs (Total)</p>
+                <p className="text-sm text-slate-500">Completed Jobs (Total)</p>
                 <p className="text-3xl font-bold text-accent-600">
                   {stats.completedJobs}
                 </p>
               </div>
               <div>
-                <p className="text-sm text-gray-500">Total Requests</p>
-                <p className="text-3xl font-bold text-gray-700">
+                <p className="text-sm text-slate-500">Total Requests</p>
+                <p className="text-3xl font-bold text-slate-700">
                   {stats.totalRequests}
                 </p>
               </div>
@@ -134,15 +137,25 @@ export function AdminDashboard() {
           )}
 
           {/* Quick actions */}
-          <h3 className="text-lg font-semibold mb-4">Quick Actions</h3>
+          <h3 className="section-title mb-4">Quick Actions</h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <Link
+              to="/admin/special-request"
+              className="card hover:border-accent-300 text-center py-4 transition-colors"
+            >
+              <HeartHandshake
+                size={24}
+                className="mx-auto text-accent-500 mb-2"
+              />
+              <p className="text-sm font-medium">Special Request</p>
+            </Link>
             <Link
               to="/admin/workers/register"
               className="card hover:border-primary-300 text-center py-4 transition-colors"
             >
               <UserPlus
                 size={24}
-                className="mx-auto text-gray-400 mb-2"
+                className="mx-auto text-slate-400 mb-2"
               />
               <p className="text-sm font-medium">Register Worker</p>
             </Link>
@@ -152,9 +165,19 @@ export function AdminDashboard() {
             >
               <Database
                 size={24}
-                className="mx-auto text-gray-400 mb-2"
+                className="mx-auto text-slate-400 mb-2"
               />
               <p className="text-sm font-medium">Data Entry</p>
+            </Link>
+            <Link
+              to="/admin/services"
+              className="card hover:border-primary-300 text-center py-4 transition-colors"
+            >
+              <List
+                size={24}
+                className="mx-auto text-slate-400 mb-2"
+              />
+              <p className="text-sm font-medium">Services</p>
             </Link>
             <Link
               to="/admin/workers"
@@ -162,7 +185,7 @@ export function AdminDashboard() {
             >
               <Wrench
                 size={24}
-                className="mx-auto text-gray-400 mb-2"
+                className="mx-auto text-slate-400 mb-2"
               />
               <p className="text-sm font-medium">Worker List</p>
             </Link>
@@ -172,9 +195,19 @@ export function AdminDashboard() {
             >
               <Users
                 size={24}
-                className="mx-auto text-gray-400 mb-2"
+                className="mx-auto text-slate-400 mb-2"
               />
               <p className="text-sm font-medium">User Management</p>
+            </Link>
+            <Link
+              to="/admin/logs"
+              className="card hover:border-primary-300 text-center py-4 transition-colors"
+            >
+              <ScrollText
+                size={24}
+                className="mx-auto text-slate-400 mb-2"
+              />
+              <p className="text-sm font-medium">System Logs</p>
             </Link>
           </div>
         </>

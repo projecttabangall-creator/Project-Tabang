@@ -1,4 +1,15 @@
 import { z } from "zod";
+import { isWorkerCredentialType } from "../constants/workerCredentials";
+
+const workerCredentialSchema = z.object({
+  type: z
+    .string()
+    .trim()
+    .min(1, "Credential type is required")
+    .refine((value) => isWorkerCredentialType(value), "Invalid credential type"),
+  name: z.string().trim().min(1, "Credential name is required").optional(),
+  fileUrl: z.string().trim().min(1, "Credential file URL is required"),
+});
 
 export const registerResidentSchema = z.object({
   firstName: z.string().min(1, "First name is required"),
@@ -35,6 +46,12 @@ export const registerWorkerSchema = z.object({
     blockNo: z.string().optional().default(""),
     barangay: z.string().min(1, "Barangay is required"),
   }),
+  credentials: z
+    .array(workerCredentialSchema)
+    .optional()
+    .default([]),
+  biometricEnrolled: z.boolean().optional().default(false),
+  termsAcceptedAt: z.string().optional(),
 });
 
 export const loginSchema = z.object({

@@ -8,7 +8,7 @@ import {
   DEFAULT_CREDIT_POINTS,
   ROLES,
 } from "@tabang/shared";
-import admin from "../config/firebase";
+import { FieldValue } from "firebase-admin/firestore";
 
 /**
  * POST /api/auth/register
@@ -46,7 +46,7 @@ export async function registerResident(
     await auth.setCustomUserClaims(userRecord.uid, { role: ROLES.RESIDENT });
 
     // Create user document in Firestore
-    const now = admin.firestore.FieldValue.serverTimestamp();
+    const now = FieldValue.serverTimestamp();
     await db.collection("users").doc(userRecord.uid).set({
       uid: userRecord.uid,
       role: ROLES.RESIDENT,
@@ -148,7 +148,7 @@ export async function verifyOtp(req: Request, res: Response): Promise<void> {
     await db.collection("users").doc(userId).update({
       isVerified: true,
       otpVerified: true,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
     });
 
     // Clean up OTP
@@ -337,6 +337,32 @@ export async function confirmResetPassword(
   } catch (error) {
     console.error("Confirm reset password error:", error);
     res.status(500).json({ error: "Password reset failed" });
+  }
+}
+
+/**
+ * PATCH /api/auth/profile
+ * Update current user's profile (profilePhotoUrl, email).
+ */
+export async function updateProfile(
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> {
+  const { profilePhotoUrl, email } = req.body;
+
+  try {
+    const updates: Record<string, any> = {
+      updatedAt: FieldValue.serverTimestamp(),
+    };
+    if (profilePhotoUrl !== undefined) updates.profilePhotoUrl = profilePhotoUrl;
+    if (email !== undefined) updates.email = email;
+
+    await db.collection("users").doc(req.user!.uid).update(updates);
+
+    res.json({ message: "Profile updated" });
+  } catch (error) {
+    console.error("Update profile error:", error);
+    res.status(500).json({ error: "Failed to update profile" });
   }
 }
 

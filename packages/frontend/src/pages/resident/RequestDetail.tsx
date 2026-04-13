@@ -1,18 +1,18 @@
-import { useState, useEffect } from "react";
-import { useParams, useNavigate, Link } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
+import { BackButton } from "@/components/common/BackButton";
 import {
-  MapPin,
+  AlertTriangle,
   Clock,
-  DollarSign,
-  User,
+  CreditCard,
+  MapPin,
+  MessageCircle,
   Star,
   Trash2,
-  MessageCircle,
-  CreditCard,
-  AlertTriangle,
+  User,
 } from "lucide-react";
-import { MapContainer, TileLayer, Marker } from "react-leaflet";
+import { MapContainer, Marker, TileLayer } from "react-leaflet";
 import api from "@/services/api";
 
 interface Request {
@@ -22,14 +22,35 @@ interface Request {
   description: string;
   suggestedPrice: number;
   finalPrice?: number;
-  location: { latitude: number; longitude: number };
-  schedule: { date: string; startTime: string; endTime: string };
+  commission: number;
+  commissionPercent?: number;
+  totalForResident: number;
+  location: any;
+  schedule: { date: any; startTime: string; endTime: string };
   status: string;
   workerName?: string;
   workerPhone?: string;
   workerRating?: number;
   yourRating?: number;
+  photoUrls?: string[];
+  priceOverrideRequired?: boolean;
 }
+
+const getLat = (location: any) =>
+  location?._latitude ?? location?.latitude ?? 0;
+const getLng = (location: any) =>
+  location?._longitude ?? location?.longitude ?? 0;
+const formatDate = (value: any) =>
+  typeof value === "object" && value?._seconds
+    ? new Date(value._seconds * 1000).toLocaleDateString()
+    : String(value);
+
+const DISPUTABLE_STATUSES = [
+  "in_progress",
+  "completed",
+  "payment_submitted",
+  "payment_confirmed",
+];
 
 export function RequestDetail() {
   const { requestId } = useParams<{ requestId: string }>();
@@ -48,9 +69,9 @@ export function RequestDetail() {
   const fetchRequest = async () => {
     try {
       const { data } = await api.get(`/api/requests/${requestId}`);
-      setRequest(data);
-      if (data.yourRating) {
-        setRating(data.yourRating);
+      setRequest(data.request);
+      if (typeof data.request.yourRating === "number") {
+        setRating(data.request.yourRating);
       }
     } catch {
       toast.error("Failed to load request details");
@@ -61,7 +82,10 @@ export function RequestDetail() {
   };
 
   const handleCancel = async () => {
-    if (!confirm("Are you sure you want to cancel this request?")) return;
+    if (!confirm("Are you sure you want to cancel this request?")) {
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       await api.patch(`/api/requests/${requestId}/cancel`, {
@@ -69,8 +93,8 @@ export function RequestDetail() {
       });
       toast.success("Request cancelled");
       navigate("/resident/requests");
-    } catch {
-      toast.error("Failed to cancel request");
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || "Failed to cancel request");
     } finally {
       setIsSubmitting(false);
     }
@@ -78,6 +102,7 @@ export function RequestDetail() {
 
   const handleRateWorker = async (e: React.FormEvent) => {
     e.preventDefault();
+
     if (rating < 1 || rating > 5) {
       toast.error("Please select a rating between 1 and 5");
       return;
@@ -89,8 +114,8 @@ export function RequestDetail() {
         rating,
         ratingComment: comment,
       });
-      toast.success("Thank you for rating the worker!");
-      fetchRequest();
+      toast.success("Thank you for rating the worker.");
+      await fetchRequest();
       setShowRatingForm(false);
     } catch (error: any) {
       toast.error(error.response?.data?.error || "Failed to submit rating");
@@ -108,50 +133,81 @@ export function RequestDetail() {
   }
 
   if (!request) {
-    return <div className="text-center py-12 text-gray-500">Request not found</div>;
+    return <div className="text-center py-12 text-slate-500">Request not found</div>;
   }
 
   const statusBadgeColor = {
+    pending: "bg-slate-100 text-slate-700",
     assigned: "bg-yellow-50 text-yellow-700",
-    accepted: "bg-blue-50 text-blue-700",
+    accepted: "bg-primary-50 text-primary-700",
     worker_arrived: "bg-purple-50 text-purple-700",
     price_confirmed: "bg-indigo-50 text-indigo-700",
     in_progress: "bg-accent-50 text-accent-700",
-    completed: "bg-green-50 text-green-700",
-    payment_submitted: "bg-green-50 text-green-700",
-    payment_confirmed: "bg-green-100 text-green-800",
+    completed: "bg-emerald-50 text-emerald-700",
+    payment_submitted: "bg-emerald-50 text-emerald-700",
+    payment_confirmed: "bg-emerald-100 text-emerald-800",
     cancelled: "bg-red-50 text-red-700",
+    under_dispute: "bg-orange-50 text-orange-700",
   } as const;
 
-  const canCancel =
-    ["assigned", "accepted", "worker_arrived"].includes(request.status);
-  const canRate = ["completed", "payment_submitted", "payment_confirmed"].includes(
-    request.status
-  );
+  const canCancel = [
+    "pending",
+    "assigned",
+    "accepted",
+    "worker_arrived",
+    "price_confirmed",
+    "in_progress",
+  ].includes(request.status);
+  const canRate = request.status === "payment_confirmed";
+  const workerPrice = request.finalPrice || request.suggestedPrice;
+  const commissionPercent = request.commissionPercent || 10;
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
-      {/* Header */}
+      <BackButton to="/resident/requests" label="Back to Requests" />
+
       <div className="card">
         <div className="flex items-start justify-between mb-4">
           <div>
             <h2 className="text-2xl font-bold">{request.categoryName}</h2>
-            <p className="text-gray-600">{request.itemName}</p>
+            <p className="text-slate-600">{request.itemName}</p>
           </div>
           <span
             className={`text-xs font-semibold px-3 py-1 rounded-full ${
               statusBadgeColor[
                 request.status as keyof typeof statusBadgeColor
-              ] || "bg-gray-100 text-gray-700"
+              ] || "bg-slate-100 text-slate-700"
             }`}
           >
             {request.status.replace(/_/g, " ").toUpperCase()}
           </span>
         </div>
-        <p className="text-gray-700">{request.description}</p>
+        <p className="text-slate-700">{request.description}</p>
       </div>
 
-      {/* Worker Info (if assigned) */}
+      {request.photoUrls && request.photoUrls.length > 0 && (
+        <div className="card space-y-3">
+          <h3 className="font-semibold">Your Request Photos</h3>
+          <div className="flex gap-3 overflow-x-auto pb-2">
+            {request.photoUrls.map((photoUrl, index) => (
+              <a
+                key={index}
+                href={photoUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="shrink-0 w-32 h-32 rounded-lg overflow-hidden border border-slate-200 hover:border-primary-400 transition-colors"
+              >
+                <img
+                  src={photoUrl}
+                  alt={`Photo ${index + 1}`}
+                  className="w-full h-full object-cover"
+                />
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+
       {request.workerName && (
         <div className="card space-y-3">
           <h3 className="font-semibold flex items-center gap-2">
@@ -159,18 +215,18 @@ export function RequestDetail() {
           </h3>
           <div className="space-y-2 text-sm">
             <p>
-              <span className="text-gray-600">Name:</span>{" "}
+              <span className="text-slate-600">Name:</span>{" "}
               <span className="font-medium">{request.workerName}</span>
             </p>
             {request.workerPhone && (
               <p>
-                <span className="text-gray-600">Phone:</span>{" "}
+                <span className="text-slate-600">Phone:</span>{" "}
                 <span className="font-medium">{request.workerPhone}</span>
               </p>
             )}
-            {request.workerRating && (
+            {typeof request.workerRating === "number" && (
               <div className="flex items-center gap-1">
-                <span className="text-gray-600">Rating:</span>
+                <span className="text-slate-600">Rating:</span>
                 <span className="font-medium flex items-center gap-1">
                   <Star size={14} fill="currentColor" className="text-yellow-400" />
                   {request.workerRating.toFixed(1)}
@@ -181,55 +237,55 @@ export function RequestDetail() {
         </div>
       )}
 
-      {/* Pricing */}
       <div className="card space-y-3">
         <h3 className="font-semibold flex items-center gap-2">
-          <DollarSign size={18} /> Pricing
+          <span className="text-lg">₱</span> Pricing
         </h3>
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <p className="text-xs text-gray-600">Suggested Price</p>
+            <p className="text-xs text-slate-600">Suggested Price</p>
             <p className="text-xl font-bold text-primary-600">
-              ₱{request.suggestedPrice}
+              PHP {request.suggestedPrice}
             </p>
           </div>
-          {request.finalPrice && (
-            <div>
-              <p className="text-xs text-gray-600">Final Price (Negotiated)</p>
-              <p className="text-xl font-bold text-accent-600">
-                ₱{request.finalPrice}
-              </p>
-            </div>
-          )}
-        </div>
-        {request.finalPrice && (
           <div>
-            <p className="text-xs text-gray-600">Commission (10%)</p>
-            <p className="text-sm font-medium text-gray-700">
-              ₱{(request.finalPrice * 0.1).toFixed(2)}
+            <p className="text-xs text-slate-600">
+              {request.finalPrice ? "Final Price" : "Current Worker Price"}
             </p>
-            <div className="mt-2 pt-2 border-t border-gray-200">
-              <p className="text-xs text-gray-600">Total You Pay</p>
-              <p className="text-lg font-bold">
-                ₱{(request.finalPrice * 1.1).toFixed(2)}
-              </p>
-            </div>
+            <p className="text-xl font-bold text-accent-600">PHP {workerPrice}</p>
           </div>
-        )}
+        </div>
+
+        <div className="border-t border-slate-200 pt-3 space-y-2">
+          <div className="flex justify-between text-sm">
+            <span className="text-slate-600">Barangay Fee ({commissionPercent}%)</span>
+            <span className="font-medium">PHP {request.commission}</span>
+          </div>
+          <div className="flex justify-between text-base font-semibold">
+            <span>Total You Pay</span>
+            <span>PHP {request.totalForResident}</span>
+          </div>
+        </div>
       </div>
 
-      {/* Schedule */}
+      {request.priceOverrideRequired && request.status === "worker_arrived" && (
+        <div className="card bg-amber-50 border border-amber-200 text-amber-800">
+          The worker submitted a final price that needs admin approval before the
+          job can continue.
+        </div>
+      )}
+
       <div className="card space-y-3">
         <h3 className="font-semibold flex items-center gap-2">
           <Clock size={18} /> Schedule
         </h3>
         <div className="space-y-2 text-sm">
           <p>
-            <span className="text-gray-600">Date:</span>{" "}
-            <span className="font-medium">{request.schedule.date}</span>
+            <span className="text-slate-600">Date:</span>{" "}
+            <span className="font-medium">{formatDate(request.schedule.date)}</span>
           </p>
           <p>
-            <span className="text-gray-600">Time:</span>{" "}
+            <span className="text-slate-600">Time:</span>{" "}
             <span className="font-medium">
               {request.schedule.startTime} - {request.schedule.endTime}
             </span>
@@ -237,14 +293,13 @@ export function RequestDetail() {
         </div>
       </div>
 
-      {/* Location Map */}
       <div className="card space-y-3">
         <h3 className="font-semibold flex items-center gap-2">
           <MapPin size={18} /> Location
         </h3>
-        <div className="h-64 rounded-lg overflow-hidden border border-gray-200">
+        <div className="h-64 rounded-lg overflow-hidden border border-slate-200">
           <MapContainer
-            center={[request.location.latitude, request.location.longitude]}
+            center={[getLat(request.location), getLng(request.location)]}
             zoom={15}
             style={{ height: "100%" }}
           >
@@ -252,19 +307,16 @@ export function RequestDetail() {
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               attribution="&copy; OpenStreetMap contributors"
             />
-            <Marker
-              position={[request.location.latitude, request.location.longitude]}
-            />
+            <Marker position={[getLat(request.location), getLng(request.location)]} />
           </MapContainer>
         </div>
-        <p className="text-xs text-gray-500">
-          Coordinates: {request.location.latitude.toFixed(4)},{" "}
-          {request.location.longitude.toFixed(4)}
+        <p className="text-xs text-slate-500">
+          Coordinates: {getLat(request.location).toFixed(4)},{" "}
+          {getLng(request.location).toFixed(4)}
         </p>
       </div>
 
-      {/* Rating Form */}
-      {canRate && !request.yourRating && (
+      {canRate && request.yourRating === undefined && (
         <div className="card space-y-4">
           <h3 className="font-semibold flex items-center gap-2">
             <Star size={18} /> Rate the Worker
@@ -289,7 +341,7 @@ export function RequestDetail() {
                       className={`p-2 rounded-lg transition-colors ${
                         rating >= star
                           ? "bg-yellow-100 text-yellow-600"
-                          : "bg-gray-100 text-gray-400"
+                          : "bg-slate-100 text-slate-400"
                       }`}
                     >
                       <Star size={24} fill="currentColor" />
@@ -335,8 +387,8 @@ export function RequestDetail() {
         </div>
       )}
 
-      {request.yourRating !== undefined && request.yourRating > 0 && (
-        <div className="card bg-green-50 border border-green-200">
+      {typeof request.yourRating === "number" && request.yourRating > 0 && (
+        <div className="card bg-emerald-50 border border-emerald-200">
           <div className="flex items-center gap-2 mb-2">
             <Star size={18} fill="currentColor" className="text-yellow-400" />
             <span className="font-semibold">Your Rating</span>
@@ -346,11 +398,11 @@ export function RequestDetail() {
               <Star
                 key={star}
                 size={18}
-                fill={star <= (request.yourRating || 0) ? "currentColor" : "none"}
+                fill={star <= request.yourRating! ? "currentColor" : "none"}
                 className={
-                  star <= (request.yourRating || 0)
+                  star <= request.yourRating!
                     ? "text-yellow-400"
-                    : "text-gray-300"
+                    : "text-slate-300"
                 }
               />
             ))}
@@ -358,7 +410,6 @@ export function RequestDetail() {
         </div>
       )}
 
-      {/* Submit Payment Button */}
       {request.status === "completed" && (
         <Link
           to={`/resident/request/${requestId}/pay`}
@@ -369,8 +420,7 @@ export function RequestDetail() {
         </Link>
       )}
 
-      {/* File Dispute Button */}
-      {["worker_arrived", "price_confirmed", "in_progress", "completed", "payment_submitted", "payment_confirmed"].includes(request.status) && (
+      {DISPUTABLE_STATUSES.includes(request.status) && (
         <Link
           to={`/resident/request/${requestId}/dispute`}
           className="w-full py-3 bg-yellow-50 hover:bg-yellow-100 text-yellow-700 font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
@@ -380,7 +430,6 @@ export function RequestDetail() {
         </Link>
       )}
 
-      {/* Action Buttons */}
       {canCancel && (
         <button
           onClick={handleCancel}
@@ -391,14 +440,6 @@ export function RequestDetail() {
           {isSubmitting ? "Cancelling..." : "Cancel Request"}
         </button>
       )}
-
-      {/* Back Button */}
-      <button
-        onClick={() => navigate("/resident/requests")}
-        className="w-full py-2 text-gray-700 hover:text-gray-900 font-medium"
-      >
-        ← Back to Requests
-      </button>
     </div>
   );
 }

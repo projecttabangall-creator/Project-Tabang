@@ -1,14 +1,17 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
-import { Plus, Edit2, Trash2, ChevronDown, ChevronRight } from "lucide-react";
+import { Plus, Edit2, Trash2, ChevronDown, ChevronRight, X } from "lucide-react";
 import api from "@/services/api";
+import { uploadFile } from "@/utils/uploadFile";
+import { BackButton } from "@/components/common/BackButton";
 
 interface Item {
   id: string;
   name: string;
   minPrice: number;
   isFree: boolean;
+  referencePhotoUrl?: string;
 }
 
 interface Category {
@@ -28,6 +31,9 @@ export function DataEntry() {
     categoryId: string;
     item: Item;
   } | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploadingItemId, setUploadingItemId] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const categoryForm = useForm<{ name: string }>();
   const itemForm = useForm<{ name: string; minPrice: number; isFree: boolean }>();
@@ -64,14 +70,29 @@ export function DataEntry() {
     formData: { name: string; minPrice: number; isFree: boolean }
   ) {
     try {
-      await api.post(`/api/categories/${categoryId}/items`, {
+      const createRes = await api.post(`/api/categories/${categoryId}/items`, {
         name: formData.name,
         minPrice: Number(formData.minPrice),
         isFree: formData.isFree || false,
       });
+
+      const itemId = createRes.data.id;
+
+      // If a photo was selected, upload and attach it
+      if (selectedFile) {
+        const photoUrl = await uploadFile(
+          `categories/${categoryId}/items/${itemId}/reference.jpg`,
+          selectedFile
+        );
+        await api.patch(`/api/categories/${categoryId}/items/${itemId}`, {
+          referencePhotoUrl: photoUrl,
+        });
+      }
+
       toast.success(`Item "${formData.name}" added`);
       itemForm.reset();
       setShowItemForm(null);
+      setSelectedFile(null);
       fetchCategories();
     } catch (error: any) {
       toast.error(error.response?.data?.error || "Failed to add item");
@@ -84,17 +105,33 @@ export function DataEntry() {
     formData: { name: string; minPrice: number; isFree: boolean }
   ) {
     try {
-      await api.patch(`/api/categories/${categoryId}/items/${itemId}`, {
+      setUploadingItemId(itemId);
+
+      const updatePayload: any = {
         name: formData.name,
         minPrice: Number(formData.minPrice),
         isFree: formData.isFree,
-      });
+      };
+
+      // If a new file is selected, upload it first
+      if (selectedFile) {
+        const photoUrl = await uploadFile(
+          `categories/${categoryId}/items/${itemId}/reference.jpg`,
+          selectedFile
+        );
+        updatePayload.referencePhotoUrl = photoUrl;
+      }
+
+      await api.patch(`/api/categories/${categoryId}/items/${itemId}`, updatePayload);
       toast.success("Item updated");
       setEditingItem(null);
+      setSelectedFile(null);
       itemForm.reset();
       fetchCategories();
-    } catch {
-      toast.error("Failed to update item");
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || "Failed to update item");
+    } finally {
+      setUploadingItemId(null);
     }
   }
 
@@ -109,6 +146,18 @@ export function DataEntry() {
     }
   }
 
+  async function handleDeleteCategory(categoryId: string, categoryName: string) {
+    if (!confirm(`Delete category "${categoryName}" and all its items? This cannot be undone.`))
+      return;
+    try {
+      await api.delete(`/api/categories/${categoryId}`);
+      toast.success(`Category "${categoryName}" deleted`);
+      fetchCategories();
+    } catch {
+      toast.error("Failed to delete category");
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex justify-center py-12">
@@ -119,6 +168,7 @@ export function DataEntry() {
 
   return (
     <div className="max-w-3xl mx-auto">
+      <BackButton to="/admin/dashboard" label="Back to Dashboard" />
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-2xl font-bold">Data Entry</h2>
         <button
@@ -158,8 +208,8 @@ export function DataEntry() {
       {/* Categories List */}
       {categories.length === 0 ? (
         <div className="card text-center py-12">
-          <p className="text-gray-500">No categories yet.</p>
-          <p className="text-sm text-gray-400 mt-2">
+          <p className="text-slate-500">No categories yet.</p>
+          <p className="text-sm text-slate-400 mt-2">
             Add service categories and items with minimum prices to get started.
           </p>
         </div>
@@ -168,43 +218,54 @@ export function DataEntry() {
           {categories.map((category) => (
             <div key={category.id} className="card p-0 overflow-hidden">
               {/* Category Header */}
-              <button
-                onClick={() =>
-                  setExpandedCategory(
-                    expandedCategory === category.id ? null : category.id
-                  )
-                }
-                className="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors"
-              >
-                <div className="flex items-center gap-3">
+              <div className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors">
+                <button
+                  onClick={() =>
+                    setExpandedCategory(
+                      expandedCategory === category.id ? null : category.id
+                    )
+                  }
+                  className="flex-1 flex items-center gap-3"
+                >
                   {expandedCategory === category.id ? (
-                    <ChevronDown size={18} className="text-gray-400" />
+                    <ChevronDown size={18} className="text-slate-400" />
                   ) : (
-                    <ChevronRight size={18} className="text-gray-400" />
+                    <ChevronRight size={18} className="text-slate-400" />
                   )}
                   <span className="font-semibold">{category.name}</span>
-                  <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
+                  <span className="text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
                     {category.items.length} items
                   </span>
+                </button>
+                <div className="flex items-center gap-3">
+                  <span
+                    className={`text-xs px-2 py-0.5 rounded-full ${
+                      category.isActive
+                        ? "bg-emerald-100 text-emerald-700"
+                        : "bg-red-100 text-red-700"
+                    }`}
+                  >
+                    {category.isActive ? "Active" : "Inactive"}
+                  </span>
+                  <button
+                    onClick={() =>
+                      handleDeleteCategory(category.id, category.name)
+                    }
+                    className="text-slate-400 hover:text-red-600 transition-colors"
+                    title="Delete category"
+                  >
+                    <Trash2 size={16} />
+                  </button>
                 </div>
-                <span
-                  className={`text-xs px-2 py-0.5 rounded-full ${
-                    category.isActive
-                      ? "bg-green-100 text-green-700"
-                      : "bg-red-100 text-red-700"
-                  }`}
-                >
-                  {category.isActive ? "Active" : "Inactive"}
-                </span>
-              </button>
+              </div>
 
               {/* Expanded: Items List */}
               {expandedCategory === category.id && (
-                <div className="border-t border-gray-100 px-4 pb-4">
+                <div className="border-t border-slate-100 px-4 pb-4">
                   {category.items.length > 0 && (
                     <table className="w-full text-sm mt-3">
                       <thead>
-                        <tr className="text-left text-gray-500 border-b">
+                        <tr className="text-left text-slate-500 border-b">
                           <th className="pb-2 font-medium">Item</th>
                           <th className="pb-2 font-medium">Min Price</th>
                           <th className="pb-2 font-medium">Free</th>
@@ -216,13 +277,47 @@ export function DataEntry() {
                           editingItem?.item.id === item.id ? (
                             <tr key={item.id}>
                               <td className="py-2 pr-2">
-                                <input
-                                  className="input-field text-sm"
-                                  defaultValue={item.name}
-                                  {...itemForm.register("name", {
-                                    required: true,
-                                  })}
-                                />
+                                <div className="space-y-2">
+                                  <input
+                                    className="input-field text-sm"
+                                    defaultValue={item.name}
+                                    {...itemForm.register("name", {
+                                      required: true,
+                                    })}
+                                  />
+                                  <div className="flex items-center gap-2">
+                                    <label className="flex items-center gap-1 px-2 py-1 border border-slate-300 rounded text-xs cursor-pointer hover:bg-slate-50">
+                                      <input
+                                        ref={fileInputRef}
+                                        type="file"
+                                        accept="image/*"
+                                        className="hidden"
+                                        onChange={(e) =>
+                                          setSelectedFile(e.target.files?.[0] || null)
+                                        }
+                                      />
+                                      Upload photo
+                                    </label>
+                                    {selectedFile && (
+                                      <div className="flex items-center gap-1 text-xs text-slate-600">
+                                        <span className="truncate max-w-[80px]">
+                                          {selectedFile.name}
+                                        </span>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setSelectedFile(null);
+                                            if (fileInputRef.current)
+                                              fileInputRef.current.value = "";
+                                          }}
+                                          className="text-slate-400 hover:text-red-600"
+                                        >
+                                          <X size={12} />
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
                               </td>
                               <td className="py-2 pr-2">
                                 <input
@@ -238,7 +333,13 @@ export function DataEntry() {
                                 <input
                                   type="checkbox"
                                   defaultChecked={item.isFree}
-                                  {...itemForm.register("isFree")}
+                                  {...itemForm.register("isFree", {
+                                    onChange: (e) => {
+                                      if (e.target.checked) {
+                                        itemForm.setValue("minPrice", 0);
+                                      }
+                                    },
+                                  })}
                                 />
                               </td>
                               <td className="py-2 flex gap-1">
@@ -250,13 +351,19 @@ export function DataEntry() {
                                       data
                                     )
                                   )}
-                                  className="text-primary-600 text-xs font-medium"
+                                  disabled={uploadingItemId === item.id}
+                                  className="text-primary-600 text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
-                                  Save
+                                  {uploadingItemId === item.id ? "Saving..." : "Save"}
                                 </button>
                                 <button
-                                  onClick={() => setEditingItem(null)}
-                                  className="text-gray-400 text-xs"
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingItem(null);
+                                    setSelectedFile(null);
+                                    if (fileInputRef.current) fileInputRef.current.value = "";
+                                  }}
+                                  className="text-slate-400 text-xs"
                                 >
                                   Cancel
                                 </button>
@@ -265,9 +372,20 @@ export function DataEntry() {
                           ) : (
                             <tr
                               key={item.id}
-                              className="border-b border-gray-50"
+                              className="border-b border-slate-50"
                             >
-                              <td className="py-2">{item.name}</td>
+                              <td className="py-2">
+                                <div className="flex items-center gap-2">
+                                  {item.referencePhotoUrl && (
+                                    <img
+                                      src={item.referencePhotoUrl}
+                                      alt={item.name}
+                                      className="w-6 h-6 rounded object-cover"
+                                    />
+                                  )}
+                                  <span>{item.name}</span>
+                                </div>
+                              </td>
                               <td className="py-2">
                                 {item.isFree
                                   ? "Free"
@@ -275,7 +393,7 @@ export function DataEntry() {
                               </td>
                               <td className="py-2">
                                 {item.isFree ? (
-                                  <span className="text-green-600 text-xs">
+                                  <span className="text-emerald-600 text-xs">
                                     Yes
                                   </span>
                                 ) : (
@@ -297,7 +415,7 @@ export function DataEntry() {
                                       );
                                       itemForm.setValue("isFree", item.isFree);
                                     }}
-                                    className="text-gray-400 hover:text-primary-600"
+                                    className="text-slate-400 hover:text-primary-600"
                                   >
                                     <Edit2 size={14} />
                                   </button>
@@ -305,7 +423,7 @@ export function DataEntry() {
                                     onClick={() =>
                                       handleDeleteItem(category.id, item.id)
                                     }
-                                    className="text-gray-400 hover:text-red-600"
+                                    className="text-slate-400 hover:text-red-600"
                                   >
                                     <Trash2 size={14} />
                                   </button>
@@ -324,35 +442,70 @@ export function DataEntry() {
                       onSubmit={itemForm.handleSubmit((data) =>
                         handleCreateItem(category.id, data)
                       )}
-                      className="flex gap-2 mt-3 items-end"
+                      className="mt-3 space-y-2"
                     >
-                      <div className="flex-1">
-                        <label className="label">Item Name</label>
-                        <input
-                          placeholder="e.g. Leaky Faucet Repair"
-                          className="input-field text-sm"
-                          {...itemForm.register("name", { required: true })}
-                        />
+                      <div className="flex gap-2 items-end">
+                        <div className="flex-1">
+                          <label className="label">Item Name</label>
+                          <input
+                            placeholder="e.g. Leaky Faucet Repair"
+                            className="input-field text-sm"
+                            {...itemForm.register("name", { required: true })}
+                          />
+                        </div>
+                        <div className="w-28">
+                          <label className="label">Min Price (₱)</label>
+                          <input
+                            type="number"
+                            placeholder="0"
+                            className="input-field text-sm"
+                            {...itemForm.register("minPrice", { required: true })}
+                          />
+                        </div>
+                        <label className="flex items-center gap-1 text-sm">
+                          <input
+                            type="checkbox"
+                            {...itemForm.register("isFree", {
+                              onChange: (e) => {
+                                if (e.target.checked) {
+                                  itemForm.setValue("minPrice", 0);
+                                }
+                              },
+                            })}
+                          />
+                          Free
+                        </label>
                       </div>
-                      <div className="w-28">
-                        <label className="label">Min Price (₱)</label>
-                        <input
-                          type="number"
-                          placeholder="0"
-                          className="input-field text-sm"
-                          {...itemForm.register("minPrice", { required: true })}
-                        />
+                      <div className="flex gap-2 items-end">
+                        <label className="flex items-center gap-2 px-3 py-2 border border-slate-300 rounded text-sm cursor-pointer hover:bg-slate-50">
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) =>
+                              setSelectedFile(e.target.files?.[0] || null)
+                            }
+                          />
+                          📷 Reference Photo
+                        </label>
+                        {selectedFile && (
+                          <div className="flex items-center gap-1 text-xs text-slate-600">
+                            <span className="truncate max-w-[100px]">
+                              {selectedFile.name}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedFile(null)}
+                              className="text-slate-400 hover:text-red-600"
+                            >
+                              <X size={12} />
+                            </button>
+                          </div>
+                        )}
+                        <button type="submit" className="btn-primary text-sm">
+                          Add
+                        </button>
                       </div>
-                      <label className="flex items-center gap-1 text-sm mb-2">
-                        <input
-                          type="checkbox"
-                          {...itemForm.register("isFree")}
-                        />
-                        Free
-                      </label>
-                      <button type="submit" className="btn-primary text-sm mb-0.5">
-                        Add
-                      </button>
                       <button
                         type="button"
                         onClick={() => {

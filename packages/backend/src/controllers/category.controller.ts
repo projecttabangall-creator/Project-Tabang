@@ -1,7 +1,7 @@
 import { Response } from "express";
 import { AuthenticatedRequest } from "../middleware/auth";
 import { db } from "../config/firebase";
-import admin from "../config/firebase";
+import { FieldValue } from "firebase-admin/firestore";
 import { CreateCategoryInput, CreateItemInput, UpdateItemInput } from "@tabang/shared";
 
 const categoriesRef = db.collection("categories");
@@ -61,7 +61,7 @@ export async function createCategory(
       return;
     }
 
-    const now = admin.firestore.FieldValue.serverTimestamp();
+    const now = FieldValue.serverTimestamp();
     const docRef = await categoriesRef.add({
       name,
       isActive: true,
@@ -105,7 +105,7 @@ export async function updateCategory(
     }
 
     const updates: Record<string, any> = {
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
     };
     if (name !== undefined) updates.name = name;
     if (isActive !== undefined) updates.isActive = isActive;
@@ -137,7 +137,7 @@ export async function createItem(
       return;
     }
 
-    const now = admin.firestore.FieldValue.serverTimestamp();
+    const now = FieldValue.serverTimestamp();
     const itemRef = await categoriesRef
       .doc(categoryId)
       .collection("items")
@@ -188,7 +188,7 @@ export async function updateItem(
     }
 
     const updates: Record<string, any> = {
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
     };
     if (body.name !== undefined) updates.name = body.name;
     if (body.minPrice !== undefined) updates.minPrice = body.minPrice;
@@ -234,5 +234,50 @@ export async function deleteItem(
   } catch (error) {
     console.error("Delete item error:", error);
     res.status(500).json({ error: "Failed to delete item" });
+  }
+}
+
+/**
+ * DELETE /api/categories/:id
+ * Delete a category and all its items.
+ */
+export async function deleteCategory(
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> {
+  const categoryId = req.params.id as string;
+
+  try {
+    const docRef = categoriesRef.doc(categoryId);
+    const doc = await docRef.get();
+
+    if (!doc.exists) {
+      res.status(404).json({ error: "Category not found" });
+      return;
+    }
+
+    const categoryName = doc.data()!.name;
+
+    // Delete all items in the category first
+    const itemsSnapshot = await docRef.collection("items").get();
+    const batch = db.batch();
+    itemsSnapshot.docs.forEach((itemDoc) => {
+      batch.delete(itemDoc.ref);
+    });
+    batch.delete(docRef);
+    await batch.commit();
+
+    // Log the action
+    await db.collection("systemLogs").add({
+      action: "category_deleted",
+      performedBy: req.user!.uid,
+      details: `Deleted category: ${categoryName}`,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+
+    res.json({ message: `Category "${categoryName}" deleted` });
+  } catch (error) {
+    console.error("Delete category error:", error);
+    res.status(500).json({ error: "Failed to delete category" });
   }
 }

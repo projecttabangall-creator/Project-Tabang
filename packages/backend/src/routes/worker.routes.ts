@@ -8,6 +8,7 @@ import {
   listWorkers,
   getWorker,
   verifyWorker,
+  updateCredentials,
   toggleAvailability,
   updateSchedule,
   updateLocation,
@@ -33,6 +34,9 @@ workerRouter.get("/:id", roleGuard("admin", "worker"), getWorker);
 
 // PATCH /api/workers/:id/verify — verify and activate worker (admin)
 workerRouter.patch("/:id/verify", roleGuard("admin"), verifyWorker);
+
+// PATCH /api/workers/:id/credentials — update worker credentials (admin)
+workerRouter.patch("/:id/credentials", roleGuard("admin"), updateCredentials);
 
 // PATCH /api/workers/:id/availability — toggle availability
 workerRouter.patch("/:id/availability", roleGuard("worker"), toggleAvailability);

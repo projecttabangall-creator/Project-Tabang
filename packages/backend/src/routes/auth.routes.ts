@@ -14,6 +14,7 @@ import {
   resetPassword,
   confirmResetPassword,
   getCurrentUser,
+  updateProfile,
 } from "../controllers/auth.controller";
 import { verifyToken } from "../middleware/auth";
 
@@ -32,3 +33,4 @@ authRouter.post(
 
 // Protected routes
 authRouter.get("/me", verifyToken, getCurrentUser);
+authRouter.patch("/profile", verifyToken, updateProfile);
