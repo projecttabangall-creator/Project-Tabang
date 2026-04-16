@@ -53,6 +53,14 @@ export const cancelRequestSchema = z.object({
   reason: z.string().optional(),
 });
 
+export const updateScheduleSchema = z.object({
+  schedule: z.object({
+    date: z.string().min(1, "Date is required"),
+    startTime: z.string().regex(/^\d{2}:\d{2}$/, "Invalid time format"),
+    endTime: z.string().regex(/^\d{2}:\d{2}$/, "Invalid time format"),
+  }),
+});
+
 export type CreateRequestInput = z.infer<typeof createRequestSchema> & {
   photoUrls?: string[];
 };
@@ -64,3 +72,4 @@ export type ApprovePriceOverrideInput = z.infer<
   typeof approvePriceOverrideSchema
 >;
 export type RateWorkerInput = z.infer<typeof rateWorkerSchema>;
+export type UpdateScheduleInput = z.infer<typeof updateScheduleSchema>;

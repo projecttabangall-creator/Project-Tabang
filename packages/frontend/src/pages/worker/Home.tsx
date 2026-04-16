@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
-import { Briefcase, Clock, Power } from "lucide-react";
+import { Briefcase, Clock, Power, Wallet } from "lucide-react";
 import api from "@/services/api";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -69,11 +69,12 @@ export function WorkerHome() {
   };
 
   const toggleAvailability = async () => {
+    const newAvailability = !isAvailable;
     try {
       await api.patch(`/api/workers/${userProfile?.uid}/availability`);
-      setIsAvailable((current) => !current);
+      setIsAvailable(newAvailability);
       toast.success(
-        `You are now ${!isAvailable ? "available" : "unavailable"}`
+        `You are now ${newAvailability ? "available" : "unavailable"}`
       );
     } catch {
       toast.error("Failed to update availability");
@@ -112,7 +113,7 @@ export function WorkerHome() {
         </button>
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-4 gap-4">
         <div className="card text-center">
           <p className="text-2xl font-bold text-primary-600">
             {pendingRequests.length}
@@ -131,6 +132,13 @@ export function WorkerHome() {
           </p>
           <p className="text-sm text-slate-500">Average Rating</p>
         </div>
+        <Link
+          to="/worker/checkout"
+          className="card flex flex-col items-center justify-center hover:border-primary-300 transition-colors cursor-pointer"
+        >
+          <Wallet size={24} className="text-primary-600 mb-2" />
+          <p className="text-sm text-slate-500">Withdraw Earnings</p>
+        </Link>
       </div>
 
       {pendingRequests.length > 0 && (

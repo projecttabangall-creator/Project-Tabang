@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { AlertTriangle, Upload } from "lucide-react";
+import { AlertTriangle, Upload, Camera, X } from "lucide-react";
 import api from "@/services/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { BackButton } from "@/components/common/BackButton";
@@ -21,12 +21,62 @@ export function FileDispute() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [disputeType, setDisputeType] = useState("");
   const [description, setDescription] = useState("");
-  const [evidenceUrl, setEvidenceUrl] = useState("");
+  const [evidenceFiles, setEvidenceFiles] = useState<string[]>([]);
+
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
 
   const backPath =
     userProfile?.role === "worker"
       ? `/worker/job/${requestId}`
       : `/resident/request/${requestId}`;
+
+  const MAX_IMAGES = 3;
+  const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+
+  const handleFileSelect = (file: File) => {
+    // Validate file type
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please select an image file");
+      return;
+    }
+
+    // Validate file size
+    if (file.size > MAX_FILE_SIZE) {
+      toast.error("File size must be less than 5MB");
+      return;
+    }
+
+    // Check max images
+    if (evidenceFiles.length >= MAX_IMAGES) {
+      toast.error(`Maximum ${MAX_IMAGES} images allowed`);
+      return;
+    }
+
+    // Convert to base64
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const base64 = e.target?.result as string;
+      setEvidenceFiles((prev) => [...prev, base64]);
+      toast.success("Image added");
+    };
+    reader.onerror = () => {
+      toast.error("Failed to read file");
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleCameraClick = () => {
+    cameraInputRef.current?.click();
+  };
+
+  const handleGalleryClick = () => {
+    galleryInputRef.current?.click();
+  };
+
+  const removeImage = (index: number) => {
+    setEvidenceFiles((prev) => prev.filter((_, i) => i !== index));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,13 +92,11 @@ export function FileDispute() {
 
     setIsSubmitting(true);
     try {
-      const evidenceUrls = evidenceUrl.trim() ? [evidenceUrl.trim()] : [];
-
       await api.post("/api/disputes", {
         requestId,
         disputeType,
         description,
-        evidenceUrls,
+        evidenceUrls: evidenceFiles,
       });
 
       toast.success(
@@ -119,24 +167,78 @@ export function FileDispute() {
           <p className="text-xs text-slate-500">Minimum 10 characters</p>
         </div>
 
-        {/* Evidence */}
+        {/* Evidence - Photo Upload */}
         <div className="card space-y-4">
           <h3 className="font-semibold flex items-center gap-2">
             <Upload size={18} /> Evidence (Optional)
           </h3>
-          <div>
-            <label className="label">Evidence URL</label>
-            <input
-              type="url"
-              placeholder="https://firebasestorage.googleapis.com/..."
-              className="input-field"
-              value={evidenceUrl}
-              onChange={(e) => setEvidenceUrl(e.target.value)}
-            />
-            <p className="text-xs text-slate-500 mt-1">
-              Upload photos or screenshots to Firebase Storage and paste the URL
-            </p>
+
+          {/* Hidden file inputs */}
+          <input
+            ref={cameraInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={(e) => e.target.files?.[0] && handleFileSelect(e.target.files[0])}
+          />
+          <input
+            ref={galleryInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => e.target.files?.[0] && handleFileSelect(e.target.files[0])}
+          />
+
+          {/* Upload Buttons */}
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={handleCameraClick}
+              disabled={evidenceFiles.length >= MAX_IMAGES}
+              className="flex-1 py-2 px-4 bg-slate-100 hover:bg-slate-200 disabled:bg-slate-100 disabled:text-slate-400 text-slate-700 font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
+            >
+              <Camera size={18} />
+              Take Photo
+            </button>
+            <button
+              type="button"
+              onClick={handleGalleryClick}
+              disabled={evidenceFiles.length >= MAX_IMAGES}
+              className="flex-1 py-2 px-4 bg-slate-100 hover:bg-slate-200 disabled:bg-slate-100 disabled:text-slate-400 text-slate-700 font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
+            >
+              <Upload size={18} />
+              Upload Photo
+            </button>
           </div>
+
+          {/* Image Previews */}
+          {evidenceFiles.length > 0 && (
+            <div className="space-y-3">
+              <p className="text-xs text-slate-500">
+                {evidenceFiles.length}/{MAX_IMAGES} images
+              </p>
+              <div className="grid grid-cols-3 gap-2">
+                {evidenceFiles.map((file, index) => (
+                  <div key={index} className="relative group">
+                    <img
+                      src={file}
+                      alt={`Evidence ${index + 1}`}
+                      className="w-full h-20 object-cover rounded-lg border border-slate-200"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeImage(index)}
+                      className="absolute top-1 right-1 p-1 bg-red-500 hover:bg-red-600 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                      title="Remove image"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Submit */}

@@ -3,6 +3,7 @@ import { useLocation, useNavigate, Link } from "react-router-dom";
 import { toast } from "sonner";
 import api from "@/services/api";
 import { BackButton } from "@/components/common/BackButton";
+import logoWithText from "@Assets/logo-with-text.png";
 
 export function OTPVerification() {
   const location = useLocation();
@@ -50,8 +51,15 @@ export function OTPVerification() {
       <div className="w-full max-w-md">
         <BackButton to="/register" label="Back to Register" />
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-primary-700">Tabang</h1>
-          <p className="text-slate-500 mt-2">Verify your account</p>
+          <img
+            src={logoWithText}
+            alt="TABANG"
+            className="h-24 object-contain mx-auto mb-3"
+          />
+          <h1 className="text-4xl font-extrabold text-primary-700 font-display tracking-tight mb-2">
+            TABANG
+          </h1>
+          <p className="text-slate-500">Verify your account</p>
         </div>
 
         <div className="card text-center">

@@ -17,12 +17,14 @@ import { Landing } from "@/pages/Landing";
 import { MyRequests } from "@/pages/resident/MyRequests";
 import { RequestService } from "@/pages/resident/RequestService";
 import { RequestDetail } from "@/pages/resident/RequestDetail";
+import { EditSchedule } from "@/pages/resident/EditSchedule";
 import { ResidentProfile } from "@/pages/resident/Profile";
 
 // Worker pages
 import { WorkerHome } from "@/pages/worker/Home";
 import { JobDetail } from "@/pages/worker/JobDetail";
 import { WorkerProfile } from "@/pages/worker/Profile";
+import Checkout from "@/pages/worker/Checkout";
 
 // Admin pages
 import { AdminDashboard } from "@/pages/admin/Dashboard";
@@ -91,6 +93,7 @@ export default function App() {
               <Route path="/resident/requests" element={<MyRequests />} />
               <Route path="/resident/request/new" element={<RequestService />} />
               <Route path="/resident/request/:requestId" element={<RequestDetail />} />
+              <Route path="/resident/request/:requestId/edit-schedule" element={<EditSchedule />} />
               <Route path="/resident/request/:requestId/pay" element={<SubmitPayment />} />
               <Route path="/resident/request/:requestId/dispute" element={<FileDispute />} />
               <Route path="/resident/notifications" element={<Notifications />} />
@@ -104,6 +107,7 @@ export default function App() {
               <Route path="/worker/home" element={<WorkerHome />} />
               <Route path="/worker/job/:jobId" element={<JobDetail />} />
               <Route path="/worker/job/:requestId/dispute" element={<FileDispute />} />
+              <Route path="/worker/checkout" element={<Checkout />} />
               <Route path="/worker/notifications" element={<Notifications />} />
               <Route path="/worker/profile" element={<WorkerProfile />} />
             </Route>

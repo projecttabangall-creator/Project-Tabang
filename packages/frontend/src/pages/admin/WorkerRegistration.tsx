@@ -509,7 +509,7 @@ export function WorkerRegistration() {
             </legend>
             <p className="text-xs text-slate-400">
               Fingerprint enrollment requires the Raspberry Pi biometric device.
-              Check the box below if the worker's fingerprint has been captured.
+              This can be done after the worker is created.
             </p>
             <label className="flex items-center gap-3 cursor-pointer px-3 py-2.5 rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors">
               <input

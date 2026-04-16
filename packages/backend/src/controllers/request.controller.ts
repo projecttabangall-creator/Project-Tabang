@@ -9,7 +9,9 @@ import {
   RateWorkerInput,
   REQUEST_STATUSES,
   SpecialRequestInput,
+  UpdateScheduleInput,
 } from "@tabang/shared";
+import { attemptRequestAssignment } from "../services/requestAssignment.service";
 import {
   calculateCancellationPenalty,
   calculateCommission,
@@ -1063,5 +1065,71 @@ export async function rateWorker(
   } catch (error) {
     console.error("Rate worker error:", error);
     res.status(500).json({ error: "Failed to rate worker" });
+  }
+}
+
+/**
+ * PATCH /api/requests/:id/schedule
+ * Resident updates schedule for pending/assigned requests
+ */
+export async function updateSchedule(
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> {
+  const requestId = req.params.id as string;
+  const residentId = req.user!.uid;
+  const body = req.body as UpdateScheduleInput;
+
+  try {
+    const docRef = requestsRef.doc(requestId);
+    const doc = await docRef.get();
+
+    if (!doc.exists) {
+      res.status(404).json({ error: "Request not found" });
+      return;
+    }
+
+    const data = doc.data()!;
+
+    if (data.residentId !== residentId) {
+      res.status(403).json({ error: "Only the resident can update this request" });
+      return;
+    }
+
+    const allowedStatuses = [REQUEST_STATUSES.PENDING, REQUEST_STATUSES.ASSIGNED];
+    if (!allowedStatuses.includes(data.status)) {
+      res.status(400).json({
+        error: "Can only update schedule for pending or assigned requests",
+      });
+      return;
+    }
+
+    const now = FieldValue.serverTimestamp();
+
+    await docRef.update({
+      schedule: {
+        date: new Timestamp(new Date(body.schedule.date).getTime() / 1000, 0),
+        startTime: body.schedule.startTime,
+        endTime: body.schedule.endTime,
+      },
+      updatedAt: now,
+    });
+
+    // Fetch updated document for response
+    const updatedDoc = await docRef.get();
+    const updatedData = updatedDoc.data()!;
+
+    // If still pending, attempt assignment with new schedule
+    if (updatedData.status === REQUEST_STATUSES.PENDING) {
+      await attemptRequestAssignment(requestId, updatedData);
+    }
+
+    const usersById = await fetchUsersByIds([data.residentId, data.assignedWorkerId]);
+    const responseData = buildRequestResponse(requestId, updatedData, usersById);
+
+    res.json({ request: responseData });
+  } catch (error) {
+    console.error("Update schedule error:", error);
+    res.status(500).json({ error: "Failed to update schedule" });
   }
 }

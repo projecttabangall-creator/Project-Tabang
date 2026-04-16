@@ -10,6 +10,7 @@ import {
   RegisterWorkerInput,
   ROLES,
 } from "@tabang/shared";
+import { attemptRequestAssignment } from "../services/requestAssignment.service";
 
 const usersRef = db.collection("users");
 const CONTACT_ALREADY_REGISTERED_ERROR = "Contact number already registered";
@@ -507,6 +508,7 @@ export async function verifyWorker(
 /**
  * PATCH /api/workers/:id/availability
  * Toggle worker availability.
+ * If toggling ON, scan for pending requests in the worker's category and attempt assignment.
  */
 export async function toggleAvailability(
   req: AuthenticatedRequest,
@@ -529,12 +531,42 @@ export async function toggleAvailability(
     }
 
     const current = doc.data()!.workerData?.isAvailable || false;
+    const newAvailability = !current;
+
     await docRef.update({
-      "workerData.isAvailable": !current,
+      "workerData.isAvailable": newAvailability,
       updatedAt: FieldValue.serverTimestamp(),
     });
 
-    res.json({ isAvailable: !current });
+    // If turning availability ON, scan for pending requests in this worker's category
+    if (newAvailability) {
+      const workerData = doc.data()!.workerData;
+      const categoryId = workerData?.specialization;
+
+      if (categoryId) {
+        // Find all pending requests in this category
+        const pendingRequests = await db
+          .collection("serviceRequests")
+          .where("categoryId", "==", categoryId)
+          .where("status", "==", "pending")
+          .where("assignedWorkerId", "==", null)
+          .get();
+
+        // Attempt assignment for each pending request
+        for (const requestDoc of pendingRequests.docs) {
+          try {
+            await attemptRequestAssignment(requestDoc.id, requestDoc.data());
+          } catch (assignmentError) {
+            console.error(
+              `Failed to reassign pending request ${requestDoc.id}:`,
+              assignmentError
+            );
+          }
+        }
+      }
+    }
+
+    res.json({ isAvailable: newAvailability });
   } catch (error) {
     console.error("Toggle availability error:", error);
     res.status(500).json({ error: "Failed to update availability" });
@@ -544,6 +576,7 @@ export async function toggleAvailability(
 /**
  * PATCH /api/workers/:id/schedule
  * Update worker availability schedule.
+ * After updating, scan for pending requests and attempt assignment.
  */
 export async function updateSchedule(
   req: AuthenticatedRequest,
@@ -558,10 +591,45 @@ export async function updateSchedule(
   }
 
   try {
-    await usersRef.doc(id).update({
+    const docRef = usersRef.doc(id);
+    const doc = await docRef.get();
+
+    if (!doc.exists) {
+      res.status(404).json({ error: "Worker not found" });
+      return;
+    }
+
+    await docRef.update({
       "workerData.availability": availability,
       updatedAt: FieldValue.serverTimestamp(),
     });
+
+    // After schedule update, scan for pending requests and attempt assignment
+    const workerData = doc.data()!.workerData;
+    const categoryId = workerData?.specialization;
+    const isWorkerAvailable = workerData?.isAvailable;
+
+    if (categoryId && isWorkerAvailable) {
+      // Find all pending requests in this category
+      const pendingRequests = await db
+        .collection("serviceRequests")
+        .where("categoryId", "==", categoryId)
+        .where("status", "==", "pending")
+        .where("assignedWorkerId", "==", undefined)
+        .get();
+
+      // Attempt assignment for each pending request
+      for (const requestDoc of pendingRequests.docs) {
+        try {
+          await attemptRequestAssignment(requestDoc.id, requestDoc.data());
+        } catch (assignmentError) {
+          console.error(
+            `Failed to reassign pending request ${requestDoc.id}:`,
+            assignmentError
+          );
+        }
+      }
+    }
 
     res.json({ message: "Schedule updated", availability });
   } catch (error) {
@@ -650,5 +718,27 @@ export async function updateLocation(
   } catch (error) {
     console.error("Update location error:", error);
     res.status(500).json({ error: "Failed to update location" });
+  }
+}
+
+export async function logFingerprintVerification(
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> {
+  const id = req.params.id as string;
+  const { verified } = req.body;
+
+  try {
+    await usersRef.doc(id).update({
+      "workerData.lastFingerprintVerification": {
+        verified,
+        timestamp: FieldValue.serverTimestamp(),
+      },
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Log fingerprint verification error:", error);
+    res.status(500).json({ error: "Failed to log fingerprint verification" });
   }
 }

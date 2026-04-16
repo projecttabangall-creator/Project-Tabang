@@ -3,6 +3,8 @@ import { z } from "zod";
 export const submitPaymentSchema = z.object({
   requestId: z.string().min(1, "Request ID is required"),
   proofUrl: z.string().min(1, "Proof of payment URL is required"),
+  rating: z.number().int().min(1, "Please rate the worker").max(5, "Rating must be 1-5"),
+  ratingComment: z.string().optional().default(""),
 });
 
 export const rejectPaymentSchema = z.object({

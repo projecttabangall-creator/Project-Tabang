@@ -12,11 +12,10 @@ export interface Credential {
   uploadedAt: Date;
 }
 
-export interface AvailabilitySlot {
-  dayOfWeek: number; // 0=Sunday..6=Saturday
-  startTime: string; // "08:00"
-  endTime: string; // "17:00"
-}
+export type AvailabilitySlot =
+  | { type: "recurring"; dayOfWeek: number; startTime: string; endTime: string }
+  | { type: "specific"; date: string; startTime: string; endTime: string }
+  | { dayOfWeek: number; startTime: string; endTime: string }; // legacy/backward compat - treated as recurring
 
 export interface WorkerData {
   specialization: string; // category ID

@@ -4,6 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { BackButton } from "@/components/common/BackButton";
+import logoWithText from "@Assets/logo-with-text.png";
 
 interface LoginForm {
   contactNumber: string;
@@ -47,8 +48,15 @@ export function Login() {
         <BackButton to="/" label="Back" />
         {/* Logo/Brand */}
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-primary-700">Tabang</h1>
-          <p className="text-slate-500 mt-2">Community Service Booking Platform</p>
+          <img
+            src={logoWithText}
+            alt="TABANG"
+            className="h-24 object-contain mx-auto mb-3"
+          />
+          <h1 className="text-4xl font-extrabold text-primary-700 font-display tracking-tight mb-2">
+            TABANG
+          </h1>
+          <p className="text-slate-500">Community Service Booking Platform</p>
         </div>
 
         {/* Login Card */}

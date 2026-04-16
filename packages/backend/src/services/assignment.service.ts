@@ -45,28 +45,57 @@ export interface AssignmentResult {
 }
 
 /**
- * Check if worker's availability covers the requested time
+ * Convert HH:MM time string to minutes since midnight
+ */
+function timeToMinutes(time: string): number {
+  const [h, m] = time.split(":").map(Number);
+  return h * 60 + m;
+}
+
+/**
+ * Check if worker's availability overlaps with requested time (minimum 90 minutes required)
  */
 function checkAvailability(
-  availability: Array<{ dayOfWeek: number; startTime: string; endTime: string }>,
+  availability: Array<any>,
   schedule: RequestSchedule
 ): boolean {
   if (!availability || availability.length === 0) return false;
+
+  const MIN_OVERLAP_MINUTES = 90; // 1 hour 30 minutes
 
   const [year, month, day] = schedule.date.split("-").map(Number);
   const requestDate = new Date(year, month - 1, day); // local time — avoids UTC midnight shifting day in PH timezone
   const dayOfWeek = requestDate.getDay();
 
-  const matchingSlot = availability.find((slot) => slot.dayOfWeek === dayOfWeek);
-  if (!matchingSlot) return false;
+  const reqStart = timeToMinutes(schedule.startTime);
+  const reqEnd = timeToMinutes(schedule.endTime);
 
-  // Simple string comparison (assumes HH:MM format)
-  const reqStart = schedule.startTime;
-  const reqEnd = schedule.endTime;
-  const slotStart = matchingSlot.startTime;
-  const slotEnd = matchingSlot.endTime;
+  // Check all slots (not just first match) for both recurring and specific dates
+  return availability.some((slot) => {
+    const slotStart = timeToMinutes(slot.startTime);
+    const slotEnd = timeToMinutes(slot.endTime);
 
-  return reqStart >= slotStart && reqEnd <= slotEnd;
+    // Calculate overlap: latest start to earliest end
+    const overlapStart = Math.max(reqStart, slotStart);
+    const overlapEnd = Math.min(reqEnd, slotEnd);
+    const overlapMinutes = overlapEnd - overlapStart;
+
+    // Must have at least 90 minutes of overlap
+    if (overlapMinutes < MIN_OVERLAP_MINUTES) return false;
+
+    // Check slot type and match accordingly
+    const slotType = slot.type || "recurring"; // backward compat: treat missing type as recurring
+
+    if (slotType === "recurring") {
+      // Recurring slots match based on day-of-week
+      return slot.dayOfWeek === dayOfWeek;
+    } else if (slotType === "specific") {
+      // Specific slots match exact date
+      return slot.date === schedule.date;
+    }
+
+    return false;
+  });
 }
 
 /**

@@ -9,18 +9,29 @@ import {
   CheckCircle,
   ArrowRight,
 } from "lucide-react";
+import logoWithText from "@Assets/logo-with-text.png";
+import heroBg from "@Assets/hero-bg.png";
 
 export function Landing() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-primary-50 to-white">
       {/* Header */}
-      <header className="sticky top-0 z-40 bg-white border-b border-slate-100">
-        <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-          <h1 className="text-2xl font-extrabold text-primary-700 font-display tracking-tight">Tabang</h1>
+      <header className="sticky top-0 z-40 bg-black/30 backdrop-blur-sm border-b border-white/10">
+        <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <img
+              src={logoWithText}
+              alt="TABANG"
+              className="h-12 object-contain"
+            />
+            <h1 className="text-2xl font-extrabold text-white font-display tracking-tight hidden sm:block">
+              TABANG
+            </h1>
+          </div>
           <div className="flex gap-3">
             <Link
               to="/login"
-              className="px-4 py-2 text-sm font-medium text-slate-700 hover:text-slate-900"
+              className="px-4 py-2 text-sm font-medium text-white hover:text-slate-200"
             >
               Sign In
             </Link>
@@ -35,24 +46,31 @@ export function Landing() {
       </header>
 
       {/* Hero Section */}
-      <section className="max-w-7xl mx-auto px-4 py-20 text-center">
-        <h2 className="text-5xl font-extrabold text-slate-900 mb-6 font-display tracking-tight">
-          Connect with Skilled Local Workers
-        </h2>
-        <p className="text-xl text-slate-600 mb-8 max-w-2xl mx-auto">
-          Project Tabang bridges residents with certified service workers in your barangay.
-          Get quality work done. Fair pricing. Local support.
-        </p>
-        <div className="flex gap-4 justify-center">
-          <Link to="/register" className="btn-primary">
-            Register as Resident
-          </Link>
-          <Link
-            to="/register"
-            className="px-6 py-3 border-2 border-primary-600 text-primary-600 font-medium rounded-lg hover:bg-primary-50 transition-colors"
-          >
-            Apply as Worker
-          </Link>
+      <section
+        className="relative px-4 py-32 text-center"
+        style={{ backgroundImage: `url(${heroBg})`, backgroundSize: "cover", backgroundPosition: "center" }}
+      >
+        {/* Dark overlay for text contrast */}
+        <div className="absolute inset-0 bg-black/50" />
+        <div className="relative max-w-7xl mx-auto">
+          <h2 className="text-5xl font-extrabold text-white mb-6 font-display tracking-tight">
+            Connect with Skilled Local Workers
+          </h2>
+          <p className="text-xl text-slate-200 mb-8 max-w-2xl mx-auto">
+            Project Tabang bridges residents with certified service workers in your barangay.
+            Get quality work done. Fair pricing. Local support.
+          </p>
+          <div className="flex gap-4 justify-center">
+            <Link to="/register" className="btn-primary">
+              Register as Resident
+            </Link>
+            <Link
+              to="/register"
+              className="px-6 py-3 border-2 border-white text-white font-medium rounded-lg hover:bg-white/10 transition-colors"
+            >
+              Apply as Worker
+            </Link>
+          </div>
         </div>
       </section>
 

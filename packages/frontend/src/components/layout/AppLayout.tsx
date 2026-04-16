@@ -3,6 +3,7 @@ import { MobileNav } from "./MobileNav";
 import { useAuth } from "@/contexts/AuthContext";
 import { LogOut } from "lucide-react";
 import { getNavItems } from "./navItems";
+import logoWithText from "@Assets/logo-with-text.png";
 
 export function AppLayout() {
   const { userProfile, signOut } = useAuth();
@@ -12,11 +13,18 @@ export function AppLayout() {
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
       {/* Top header */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-40 h-14">
-        <div className="max-w-full px-4 h-full flex items-center justify-between">
-          <h1 className="text-xl font-extrabold text-primary-700 font-display tracking-tight">
-            Tabang
-          </h1>
+      <header className="bg-white border-b border-slate-200 sticky top-0 z-40 h-16">
+        <div className="max-w-full px-4 h-full flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <img
+              src={logoWithText}
+              alt="TABANG"
+              className="h-12 object-contain"
+            />
+            <h1 className="text-2xl font-extrabold text-primary-700 font-display tracking-tight hidden sm:block">
+              TABANG
+            </h1>
+          </div>
           {userProfile && (
             <div className="flex items-center gap-3">
               <span className="text-sm text-slate-600 hidden sm:block font-medium">

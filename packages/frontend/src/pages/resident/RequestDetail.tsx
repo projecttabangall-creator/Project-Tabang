@@ -73,9 +73,11 @@ export function RequestDetail() {
       if (typeof data.request.yourRating === "number") {
         setRating(data.request.yourRating);
       }
-    } catch {
-      toast.error("Failed to load request details");
-      navigate("/resident/requests");
+    } catch (error: any) {
+      const errorMsg = error.response?.data?.error || "Failed to load request details";
+      console.error("Request detail error:", errorMsg, error.response?.status);
+      toast.error(errorMsg);
+      setTimeout(() => navigate("/resident/requests"), 1500);
     } finally {
       setIsLoading(false);
     }

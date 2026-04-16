@@ -21,11 +21,10 @@ import { getWorkerCredentialLabel } from "@/constants/workerCredentials";
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const ALL_DAYS = [0, 1, 2, 3, 4, 5, 6];
 
-interface AvailabilitySlot {
-  dayOfWeek: number;
-  startTime: string;
-  endTime: string;
-}
+type AvailabilitySlot =
+  | { type: "recurring"; dayOfWeek: number; startTime: string; endTime: string }
+  | { type: "specific"; date: string; startTime: string; endTime: string }
+  | { dayOfWeek: number; startTime: string; endTime: string }; // legacy
 
 export function WorkerProfile() {
   const { userProfile, refreshProfile } = useAuth();
@@ -85,19 +84,53 @@ export function WorkerProfile() {
         return;
       }
 
-      // Rule 2: no overlap with another slot on the same day
+      const slotType = "type" in slot ? slot.type : "recurring";
+
+      // Rule 2: no overlap with other slots
       for (let j = 0; j < slots.length; j++) {
         if (j === i) continue;
         const other = slots[j];
-        if (other.dayOfWeek !== slot.dayOfWeek) continue;
+        const otherType = "type" in other ? other.type : "recurring";
 
-        // Overlap: A starts before B ends AND A ends after B starts
-        const overlaps =
+        // Check time overlap (applies to all)
+        const timesOverlap =
           slot.startTime < other.endTime && slot.endTime > other.startTime;
 
-        if (overlaps) {
-          errors[i] = `Conflicts with ${DAY_NAMES[other.dayOfWeek]} ${other.startTime}–${other.endTime}.`;
-          break;
+        if (!timesOverlap) continue;
+
+        // Recurring vs Recurring: same dayOfWeek
+        if (slotType === "recurring" && otherType === "recurring") {
+          if ("dayOfWeek" in slot && "dayOfWeek" in other && slot.dayOfWeek === other.dayOfWeek) {
+            errors[i] = `Conflicts with ${DAY_NAMES[other.dayOfWeek as number]} ${other.startTime}–${other.endTime}.`;
+            break;
+          }
+        }
+        // Specific vs Specific: same date
+        else if (slotType === "specific" && otherType === "specific") {
+          if ("date" in slot && "date" in other && slot.date === other.date) {
+            errors[i] = `Conflicts with ${new Date(other.date).toLocaleDateString()} ${other.startTime}–${other.endTime}.`;
+            break;
+          }
+        }
+        // Recurring vs Specific: if specific date falls on recurring day
+        else if (slotType === "recurring" && otherType === "specific") {
+          if ("dayOfWeek" in slot && "date" in other) {
+            const dayOfWeek = new Date(other.date).getDay();
+            if (slot.dayOfWeek === dayOfWeek) {
+              errors[i] = `Conflicts with ${new Date(other.date).toLocaleDateString()} ${other.startTime}–${other.endTime}.`;
+              break;
+            }
+          }
+        }
+        // Specific vs Recurring: if specific date falls on recurring day
+        else if (slotType === "specific" && otherType === "recurring") {
+          if ("date" in slot && "dayOfWeek" in other) {
+            const dayOfWeek = new Date(slot.date).getDay();
+            if (dayOfWeek === (other.dayOfWeek as number)) {
+              errors[i] = `Conflicts with ${DAY_NAMES[other.dayOfWeek as number]} ${other.startTime}–${other.endTime}.`;
+              break;
+            }
+          }
         }
       }
     });
@@ -145,10 +178,19 @@ export function WorkerProfile() {
     }
   }
 
-  function handleAddSlot() {
+  function handleAddRecurringSlot() {
     setEditingAvailability([
       ...editingAvailability,
-      { dayOfWeek: 0, startTime: "09:00", endTime: "17:00" },
+      { type: "recurring", dayOfWeek: 0, startTime: "09:00", endTime: "17:00" },
+    ]);
+    setSlotErrors((prev) => [...prev, ""]);
+  }
+
+  function handleAddSpecificSlot() {
+    const today = new Date().toISOString().split("T")[0];
+    setEditingAvailability([
+      ...editingAvailability,
+      { type: "specific", date: today, startTime: "09:00", endTime: "17:00" },
     ]);
     setSlotErrors((prev) => [...prev, ""]);
   }
@@ -160,7 +202,7 @@ export function WorkerProfile() {
 
   function handleSlotChange(
     index: number,
-    field: keyof AvailabilitySlot,
+    field: string,
     value: any
   ) {
     const updated = [...editingAvailability];
@@ -295,6 +337,9 @@ export function WorkerProfile() {
           <div className="space-y-3">
             {editingAvailability.map((slot, i) => {
               const hasError = slotErrors[i];
+              const slotType = "type" in slot ? slot.type : "recurring";
+              const isRecurring = slotType === "recurring";
+
               return (
                 <div key={i}>
                   <div
@@ -304,26 +349,49 @@ export function WorkerProfile() {
                         : "bg-slate-50"
                     }`}
                   >
-                    <div className="flex-1">
-                      <label className="text-xs font-medium text-slate-600">
-                        Day
-                      </label>
-                      <select
-                        value={slot.dayOfWeek}
-                        onChange={(e) =>
-                          handleSlotChange(i, "dayOfWeek", Number(e.target.value))
-                        }
-                        className={`input-field text-sm mt-1 ${
-                          hasError ? "border-red-400" : ""
-                        }`}
-                      >
-                        {ALL_DAYS.map((day) => (
-                          <option key={day} value={day}>
-                            {DAY_NAMES[day]}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                    {isRecurring ? (
+                      <>
+                        <div className="flex-1">
+                          <label className="text-xs font-medium text-slate-600">
+                            Day
+                          </label>
+                          <select
+                            value={"dayOfWeek" in slot ? slot.dayOfWeek : 0}
+                            onChange={(e) =>
+                              handleSlotChange(i, "dayOfWeek", Number(e.target.value))
+                            }
+                            className={`input-field text-sm mt-1 ${
+                              hasError ? "border-red-400" : ""
+                            }`}
+                          >
+                            {ALL_DAYS.map((day) => (
+                              <option key={day} value={day}>
+                                {DAY_NAMES[day]}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="flex-1">
+                          <label className="text-xs font-medium text-slate-600">
+                            Date
+                          </label>
+                          <input
+                            type="date"
+                            value={"date" in slot ? slot.date : ""}
+                            onChange={(e) =>
+                              handleSlotChange(i, "date", e.target.value)
+                            }
+                            min={new Date().toISOString().split("T")[0]}
+                            className={`input-field text-sm mt-1 ${
+                              hasError ? "border-red-400" : ""
+                            }`}
+                          />
+                        </div>
+                      </>
+                    )}
                     <div className="flex-1">
                       <label className="text-xs font-medium text-slate-600">
                         Start
@@ -370,12 +438,20 @@ export function WorkerProfile() {
               );
             })}
 
-            <button
-              onClick={handleAddSlot}
-              className="w-full py-2 border border-slate-300 hover:border-primary-600 rounded-lg flex items-center justify-center gap-2 text-sm font-medium text-slate-600 hover:text-primary-600 transition-colors"
-            >
-              <Plus size={16} /> Add Day
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={handleAddRecurringSlot}
+                className="flex-1 py-2 border border-slate-300 hover:border-primary-600 rounded-lg flex items-center justify-center gap-2 text-sm font-medium text-slate-600 hover:text-primary-600 transition-colors"
+              >
+                <Plus size={16} /> Recurring Day
+              </button>
+              <button
+                onClick={handleAddSpecificSlot}
+                className="flex-1 py-2 border border-slate-300 hover:border-primary-600 rounded-lg flex items-center justify-center gap-2 text-sm font-medium text-slate-600 hover:text-primary-600 transition-colors"
+              >
+                <Plus size={16} /> Specific Date
+              </button>
+            </div>
 
             <div className="flex gap-2 pt-2">
               <button
@@ -396,20 +472,29 @@ export function WorkerProfile() {
         ) : (
           <div className="space-y-2">
             {workerData?.availability && workerData.availability.length > 0 ? (
-              workerData.availability.map((slot, i) => (
-                <div
-                  key={i}
-                  className="flex items-center justify-between text-sm bg-slate-50 rounded-lg px-3 py-2"
-                >
-                  <span className="font-medium">{DAY_NAMES[slot.dayOfWeek]}</span>
-                  <span className="text-slate-600">
-                    {slot.startTime} - {slot.endTime}
-                  </span>
-                </div>
-              ))
+              workerData.availability.map((slot, i) => {
+                const slotType = "type" in slot ? slot.type : "recurring";
+                const isRecurring = slotType === "recurring";
+
+                return (
+                  <div
+                    key={i}
+                    className="flex items-center justify-between text-sm bg-slate-50 rounded-lg px-3 py-2"
+                  >
+                    <span className="font-medium">
+                      {isRecurring
+                        ? `Every ${DAY_NAMES["dayOfWeek" in slot ? slot.dayOfWeek : 0]}`
+                        : `${new Date("date" in slot ? (slot.date as string) : "").toLocaleDateString()}`}
+                    </span>
+                    <span className="text-slate-600">
+                      {slot.startTime} - {slot.endTime}
+                    </span>
+                  </div>
+                );
+              })
             ) : (
               <p className="text-sm text-slate-500">
-                No availability set. Click Edit to add available days.
+                No availability set. Click Edit to add available days or dates.
               </p>
             )}
           </div>

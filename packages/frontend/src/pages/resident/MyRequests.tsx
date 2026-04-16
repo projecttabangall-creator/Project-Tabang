@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { Briefcase, Clock, MapPin, Star } from "lucide-react";
+import { Briefcase, Clock, MapPin, Star, Edit2 } from "lucide-react";
 import api from "@/services/api";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -37,6 +37,7 @@ const COMPLETED_STATUSES = ["payment_confirmed"];
 
 export function MyRequests() {
   useAuth();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<Tab>("active");
   const [isLoading, setIsLoading] = useState(true);
   const [requests, setRequests] = useState<Request[]>([]);
@@ -264,11 +265,25 @@ export function MyRequests() {
                     </div>
                   )}
                 </div>
-                <span className="text-xs text-slate-400">
-                  {ACTIVE_STATUSES.includes(request.status)
-                    ? "Ongoing"
-                    : "Completed"}
-                </span>
+                <div className="flex items-center gap-2">
+                  {(request.status === "pending" || request.status === "assigned") && (
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        navigate(`/resident/request/${request.id}/edit-schedule`);
+                      }}
+                      className="text-xs bg-primary-50 hover:bg-primary-100 text-primary-700 px-3 py-1 rounded transition-colors flex items-center gap-1"
+                    >
+                      <Edit2 size={12} />
+                      Edit Schedule
+                    </button>
+                  )}
+                  <span className="text-xs text-slate-400">
+                    {ACTIVE_STATUSES.includes(request.status)
+                      ? "Ongoing"
+                      : "Completed"}
+                  </span>
+                </div>
               </div>
             </Link>
           ))}

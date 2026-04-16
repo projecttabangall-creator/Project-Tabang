@@ -3,8 +3,8 @@ import { useForm } from "react-hook-form";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { BackButton } from "@/components/common/BackButton";
-import { Calendar, Camera, Clock, MapPin, Upload, X } from "lucide-react";
-import { MapContainer, Marker, TileLayer, useMapEvents } from "react-leaflet";
+import { Calendar, Camera, Clock, LocateFixed, MapPin, Upload, X } from "lucide-react";
+import { MapContainer, Marker, TileLayer, useMap, useMapEvents } from "react-leaflet";
 import api from "@/services/api";
 
 const DEFAULT_COMMISSION_PERCENT = 10;
@@ -42,6 +42,16 @@ function MapClickHandler({
   return null;
 }
 
+function FlyToLocation({ position }: { position: [number, number] | null }) {
+  const map = useMap();
+  useEffect(() => {
+    if (position) {
+      map.flyTo(position, 16);
+    }
+  }, [position, map]);
+  return null;
+}
+
 export function RequestService() {
   const navigate = useNavigate();
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -57,6 +67,7 @@ export function RequestService() {
     null
   );
   const [photoDataUrls, setPhotoDataUrls] = useState<string[]>([]);
+  const [isLocating, setIsLocating] = useState(false);
 
   const {
     register,
@@ -146,6 +157,28 @@ export function RequestService() {
     } catch {
       toast.success("Location selected (address lookup failed)");
     }
+  };
+
+  const handleShareLocation = () => {
+    if (!navigator.geolocation) {
+      toast.error("Geolocation is not supported by your browser");
+      return;
+    }
+    setIsLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        await handleLocationSelect(pos.coords.latitude, pos.coords.longitude);
+        setIsLocating(false);
+      },
+      (error) => {
+        setIsLocating(false);
+        if (error.code === error.PERMISSION_DENIED) {
+          toast.error("Location permission denied. Please allow access in your browser settings.");
+        } else {
+          toast.error("Unable to retrieve your location");
+        }
+      }
+    );
   };
 
   const handleFileSelect = (file: File) => {
@@ -383,11 +416,22 @@ export function RequestService() {
         </div>
 
         <div className="card space-y-4">
-          <h3 className="font-semibold text-lg flex items-center gap-2">
-            <MapPin size={20} /> Location
-          </h3>
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold text-lg flex items-center gap-2">
+              <MapPin size={20} /> Location
+            </h3>
+            <button
+              type="button"
+              onClick={handleShareLocation}
+              disabled={isLocating}
+              className="flex items-center gap-1.5 text-sm text-primary-600 hover:text-primary-700 font-medium disabled:opacity-50 transition-colors"
+            >
+              <LocateFixed size={16} className={isLocating ? "animate-pulse" : ""} />
+              {isLocating ? "Locating..." : "Use My Location"}
+            </button>
+          </div>
 
-          <div className="h-80 rounded-lg overflow-hidden border border-slate-200">
+          <div className="h-80 rounded-lg overflow-hidden border border-slate-200 isolate">
             <MapContainer center={mapPosition} zoom={15} style={{ height: "100%" }}>
               <TileLayer
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -395,11 +439,12 @@ export function RequestService() {
               />
               {markerPosition && <Marker position={markerPosition} />}
               <MapClickHandler onLocationSelect={handleLocationSelect} />
+              <FlyToLocation position={markerPosition} />
             </MapContainer>
           </div>
 
           <p className="text-sm text-slate-500">
-            Click on the map to select your location
+            Click on the map or use "Use My Location" to set your location
           </p>
 
           <div>

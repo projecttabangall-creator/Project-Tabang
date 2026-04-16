@@ -12,6 +12,8 @@ import {
 interface SubmitPaymentBody {
   requestId: string;
   proofUrl: string;
+  rating: number;
+  ratingComment?: string;
 }
 
 const paymentsRef = db.collection("payments");
@@ -94,11 +96,46 @@ export async function submitPayment(
       createdAt: now,
     });
 
-    await requestsRef.doc(body.requestId).update({
+    // Update request status and proof, and add rating if provided
+    const requestUpdate: any = {
       status: REQUEST_STATUSES.PAYMENT_SUBMITTED,
       proofOfPaymentUrl: body.proofUrl,
       updatedAt: now,
-    });
+    };
+
+    // Add rating if provided and not already rated
+    if (body.rating && !requestData.rating) {
+      requestUpdate.rating = body.rating;
+      requestUpdate.ratingComment = body.ratingComment || "";
+      requestUpdate.ratedAt = now;
+    }
+
+    await requestsRef.doc(body.requestId).update(requestUpdate);
+
+    // Recalculate worker's average rating if a new rating was added
+    if (body.rating && !requestData.rating) {
+      const workerId = requestData.assignedWorkerId;
+      if (workerId) {
+        const ratedRequests = await requestsRef
+          .where("assignedWorkerId", "==", workerId)
+          .where("rating", ">", 0)
+          .get();
+
+        if (!ratedRequests.empty) {
+          const ratings = ratedRequests.docs.map((doc) => {
+            const data = doc.data();
+            return typeof data.rating === "number" ? data.rating : 0;
+          });
+          const sum = ratings.reduce((a, b) => a + b, 0);
+          const average =
+            Math.round((sum / ratings.length) * 10) / 10;
+
+          await db.collection("users").doc(workerId).update({
+            "workerData.averageRating": average,
+          });
+        }
+      }
+    }
 
     const admins = await db.collection("users").where("role", "==", "admin").get();
     for (const adminDoc of admins.docs) {
@@ -107,8 +144,8 @@ export async function submitPayment(
         type: "payment_submitted",
         title: "Payment Proof Submitted",
         body: `Payment proof submitted for ${requestData.categoryName} - PHP ${totalAmount}`,
-        referenceType: "payment",
-        referenceId: paymentRef.id,
+        referenceType: "request",
+        referenceId: body.requestId,
         isRead: false,
         createdAt: now,
       });
@@ -229,8 +266,8 @@ export async function confirmPayment(
       type: "payment_confirmed",
       title: "Payment Confirmed",
       body: "Your payment has been confirmed. You can now rate the worker.",
-      referenceType: "payment",
-      referenceId: paymentId,
+      referenceType: "request",
+      referenceId: payment.requestId,
       isRead: false,
       createdAt: now,
     });
@@ -240,8 +277,8 @@ export async function confirmPayment(
       type: "payment_confirmed",
       title: "Payment Received",
       body: `Payment of PHP ${payment.workerAmount} has been confirmed`,
-      referenceType: "payment",
-      referenceId: paymentId,
+      referenceType: "request",
+      referenceId: payment.requestId,
       isRead: false,
       createdAt: now,
     });
@@ -306,8 +343,8 @@ export async function rejectPayment(
       type: "payment_rejected",
       title: "Payment Rejected",
       body: `Your payment proof was rejected: ${reason}. Please resubmit.`,
-      referenceType: "payment",
-      referenceId: paymentId,
+      referenceType: "request",
+      referenceId: payment.requestId,
       isRead: false,
       createdAt: now,
     });

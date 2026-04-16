@@ -1,6 +1,6 @@
 import { Response } from "express";
 import { AuthenticatedRequest } from "../middleware/auth";
-import { db } from "../config/firebase";
+import { db, storage } from "../config/firebase";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import {
   DEFAULT_COMMISSION_PERCENT,
@@ -102,6 +102,52 @@ function canFileDispute(requestData: FirebaseFirestore.DocumentData): {
 }
 
 /**
+ * Upload base64 evidence files to Firebase Storage and return download URLs
+ */
+async function uploadEvidenceFiles(
+  files: string[],
+  requestId: string
+): Promise<string[]> {
+  const bucket = storage.bucket();
+  return Promise.all(
+    files.map(async (dataUrl, i) => {
+      // If already a real URL (not base64), pass through
+      if (!dataUrl.startsWith("data:")) {
+        return dataUrl;
+      }
+
+      try {
+        // Parse data URL
+        const matches = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+        if (!matches) {
+          console.warn(`Invalid base64 format for evidence ${i}`);
+          return "";
+        }
+
+        const mimeType = matches[1];
+        const base64String = matches[2];
+        const ext = mimeType.split("/")[1] ?? "jpg";
+        const filename = `disputes/${requestId}/evidence/${Date.now()}_${i}.${ext}`;
+
+        const file = bucket.file(filename);
+        await file.save(Buffer.from(base64String, "base64"), {
+          contentType: mimeType,
+        });
+
+        // Make file publicly readable
+        await file.makePublic();
+
+        // Get the public URL
+        return file.publicUrl();
+      } catch (error) {
+        console.error(`Failed to upload evidence file ${i}:`, error);
+        return "";
+      }
+    })
+  );
+}
+
+/**
  * POST /api/disputes
  * File a dispute (resident or worker)
  */
@@ -156,13 +202,20 @@ export async function fileDispute(
       now.getTime() + DISPUTE_DEADLINE_HOURS * 60 * 60 * 1000
     );
 
+    // Upload evidence files to Firebase Storage if any provided
+    const uploadedUrls = body.evidenceUrls?.length
+      ? (await uploadEvidenceFiles(body.evidenceUrls, body.requestId)).filter(
+          (url) => url // Filter out empty strings from failed uploads
+        )
+      : [];
+
     const disputeRef = await disputesRef.add({
       requestId: body.requestId,
       filedBy: userId,
       filedAgainst,
       disputeType: body.disputeType,
       description: body.description,
-      evidenceUrls: body.evidenceUrls || [],
+      evidenceUrls: uploadedUrls,
       status: DISPUTE_STATUSES.OPEN,
       creditDeductions: [],
       createdAt: FieldValue.serverTimestamp(),

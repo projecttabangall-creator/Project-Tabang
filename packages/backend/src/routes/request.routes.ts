@@ -7,6 +7,7 @@ import {
   createRequestSchema,
   rateWorkerSchema,
   setFinalPriceSchema,
+  updateScheduleSchema,
 } from "@tabang/shared";
 import {
   acceptRequest,
@@ -21,6 +22,7 @@ import {
   rateWorker,
   rejectRequest,
   setFinalPrice,
+  updateSchedule,
 } from "../controllers/request.controller";
 
 export const requestRouter = Router();
@@ -59,6 +61,13 @@ requestRouter.patch(
   "/:id/cancel",
   roleGuard("resident", "worker", "admin"),
   cancelRequest
+);
+
+requestRouter.patch(
+  "/:id/schedule",
+  roleGuard("resident"),
+  validate(updateScheduleSchema),
+  updateSchedule
 );
 
 requestRouter.post(

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
-import { Camera, CheckCircle, Upload, X } from "lucide-react";
+import { Camera, CheckCircle, Upload, X, Star } from "lucide-react";
 import api from "@/services/api";
 import { BackButton } from "@/components/common/BackButton";
 
@@ -30,6 +30,9 @@ export function SubmitPayment() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [request, setRequest] = useState<RequestData | null>(null);
   const [proofDataUrl, setProofDataUrl] = useState<string | null>(null);
+  const [rating, setRating] = useState(0);
+  const [ratingComment, setRatingComment] = useState("");
+  const [hoverRating, setHoverRating] = useState(0);
 
   useEffect(() => {
     fetchRequest();
@@ -98,13 +101,20 @@ export function SubmitPayment() {
       return;
     }
 
+    if (rating < 1) {
+      toast.error("Please rate the worker");
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       await api.post("/api/payments", {
         requestId,
         proofUrl: proofDataUrl,
+        rating,
+        ratingComment,
       });
-      toast.success("Payment proof submitted. Waiting for admin confirmation.");
+      toast.success("Payment proof and rating submitted. Waiting for admin confirmation.");
       navigate(`/resident/request/${requestId}`);
     } catch (error: any) {
       toast.error(error.response?.data?.error || "Failed to submit payment");
@@ -260,13 +270,70 @@ export function SubmitPayment() {
           </div>
         )}
 
+        {/* Rating Section */}
+        <div className="border-t border-slate-200 pt-4 space-y-4">
+          <h3 className="font-semibold flex items-center gap-2">
+            <Star size={18} className="text-amber-500" /> Rate Your Worker
+          </h3>
+
+          {/* Star Rating */}
+          <div className="flex gap-2">
+            {[1, 2, 3, 4, 5].map((star) => (
+              <button
+                key={star}
+                type="button"
+                onClick={() => setRating(star)}
+                onMouseEnter={() => setHoverRating(star)}
+                onMouseLeave={() => setHoverRating(0)}
+                disabled={isSubmitting}
+                className="transition-transform hover:scale-110 disabled:opacity-50"
+              >
+                <Star
+                  size={32}
+                  className={`${
+                    (hoverRating || rating) >= star
+                      ? "fill-amber-400 text-amber-400"
+                      : "text-slate-300"
+                  } transition-colors`}
+                />
+              </button>
+            ))}
+          </div>
+
+          {rating > 0 && (
+            <p className="text-sm text-slate-600">
+              {rating === 1
+                ? "Poor experience"
+                : rating === 2
+                ? "Needs improvement"
+                : rating === 3
+                ? "Good service"
+                : rating === 4
+                ? "Very good"
+                : "Excellent work"}
+            </p>
+          )}
+
+          {/* Comment */}
+          <div>
+            <label className="label">Comments (Optional)</label>
+            <textarea
+              placeholder="Share your feedback about the worker's service..."
+              className="input-field h-20"
+              value={ratingComment}
+              onChange={(e) => setRatingComment(e.target.value)}
+              disabled={isSubmitting}
+            />
+          </div>
+        </div>
+
         <button
           type="submit"
-          disabled={isSubmitting || !proofDataUrl}
+          disabled={isSubmitting || !proofDataUrl || rating < 1}
           className="btn-primary w-full flex items-center justify-center gap-2"
         >
           <CheckCircle size={18} />
-          {isSubmitting ? "Submitting..." : "Submit Payment Proof"}
+          {isSubmitting ? "Submitting..." : "Submit Proof & Rating"}
         </button>
       </form>
     </div>

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
-import { CheckCircle, XCircle, ExternalLink } from "lucide-react";
+import { CheckCircle, XCircle, Image, X } from "lucide-react";
 import api from "@/services/api";
 import { BackButton } from "@/components/common/BackButton";
 
@@ -26,6 +26,7 @@ export function PaymentReview() {
   const [rejectReason, setRejectReason] = useState("");
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
+  const [selectedProofUrl, setSelectedProofUrl] = useState<string | null>(null);
 
   useEffect(() => {
     fetchPayments();
@@ -159,16 +160,14 @@ export function PaymentReview() {
                 </p>
               </div>
 
-              {/* Proof Link */}
-              <a
-                href={payment.proofUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 text-sm text-primary-600 hover:text-primary-800 font-medium"
+              {/* Proof Image Button */}
+              <button
+                onClick={() => setSelectedProofUrl(payment.proofUrl)}
+                className="flex items-center gap-2 text-sm text-primary-600 hover:text-primary-800 font-medium transition-colors"
               >
-                <ExternalLink size={14} />
+                <Image size={14} />
                 View Payment Proof
-              </a>
+              </button>
 
               {/* Actions */}
               <div className="flex gap-2 pt-2 border-t border-slate-100">
@@ -228,6 +227,30 @@ export function PaymentReview() {
               >
                 Cancel
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Image Viewer Modal */}
+      {selectedProofUrl && (
+        <div className="fixed inset-0 bg-black/75 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl overflow-hidden max-w-2xl w-full max-h-[90vh] flex flex-col">
+            <div className="flex justify-between items-center p-4 border-b border-slate-200">
+              <h3 className="font-semibold">Payment Proof</h3>
+              <button
+                onClick={() => setSelectedProofUrl(null)}
+                className="p-1 hover:bg-slate-100 rounded-lg transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="flex-1 overflow-auto flex items-center justify-center bg-black/5">
+              <img
+                src={selectedProofUrl}
+                alt="Payment proof"
+                className="max-w-full max-h-full object-contain"
+              />
             </div>
           </div>
         </div>
