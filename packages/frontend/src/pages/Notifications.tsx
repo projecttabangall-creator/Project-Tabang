@@ -76,6 +76,11 @@ function getNotificationLink(
     if (role === "resident") return `/resident/request/${referenceId}`;
     return `/${role}/notifications`;
   }
+  if (referenceType === "emergency") {
+    if (role === "admin") return `/admin/emergencies/${referenceId}`;
+    if (role === "resident") return `/resident/emergencies`;
+    if (role === "worker") return `/worker/emergencies`;
+  }
   return `/${role}/notifications`;
 }
 

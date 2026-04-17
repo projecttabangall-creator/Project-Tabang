@@ -12,6 +12,7 @@ import {
   Settings,
   History,
   TrendingUp,
+  Siren,
 } from "lucide-react";
 
 export interface NavItem {
@@ -26,12 +27,14 @@ export function getNavItems(role: string): NavItem[] {
       return [
         { to: "/resident/request/new", icon: ClipboardList, label: "New Request" },
         { to: "/resident/requests", icon: Home, label: "My Requests" },
+        { to: "/resident/emergencies", icon: Siren, label: "Emergencies" },
         { to: "/resident/notifications", icon: Bell, label: "Notifications" },
         { to: "/resident/profile", icon: User, label: "Profile" },
       ];
     case "worker":
       return [
         { to: "/worker/home", icon: Home, label: "Home" },
+        { to: "/worker/emergencies", icon: Siren, label: "Bayanihan" },
         { to: "/worker/notifications", icon: Bell, label: "Notifications" },
         { to: "/worker/profile", icon: User, label: "Profile" },
       ];
@@ -39,6 +42,7 @@ export function getNavItems(role: string): NavItem[] {
       return [
         { to: "/admin/dashboard", icon: LayoutDashboard, label: "Dashboard" },
         { to: "/admin/requests", icon: FileText, label: "Requests" },
+        { to: "/admin/emergencies", icon: Siren, label: "Emergencies" },
         { to: "/admin/payments", icon: CreditCard, label: "Payments" },
         { to: "/admin/income", icon: TrendingUp, label: "Income" },
         { to: "/admin/disputes", icon: AlertTriangle, label: "Disputes" },

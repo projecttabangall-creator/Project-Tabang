@@ -90,5 +90,10 @@ service cloud.firestore {
     match /otps/{otpId} {
       allow read, write: if false;
     }
+
+    match /emergencies/{emergencyId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if false;
+    }
   }
 }

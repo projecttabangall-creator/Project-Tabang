@@ -111,3 +111,19 @@ export async function getCreditBalance(userId: string): Promise<number> {
   if (!userDoc.exists) throw new Error(`User ${userId} not found`);
   return userDoc.data()!.creditPoints ?? MAX_CREDIT_POINTS;
 }
+
+/**
+ * Award bayanihan (emergency) credit points to a worker.
+ * Thin wrapper around restoreCredits() so logs reflect the bayanihan context.
+ */
+export async function awardEmergencyCredits(
+  userId: string,
+  amount: number,
+  emergencyId: string
+): Promise<{ newBalance: number }> {
+  return restoreCredits(
+    userId,
+    amount,
+    `bayanihan_award: emergency ${emergencyId}`
+  );
+}

@@ -19,12 +19,14 @@ import { RequestService } from "@/pages/resident/RequestService";
 import { RequestDetail } from "@/pages/resident/RequestDetail";
 import { EditSchedule } from "@/pages/resident/EditSchedule";
 import { ResidentProfile } from "@/pages/resident/Profile";
+import { ResidentEmergencyFeed } from "@/pages/resident/EmergencyFeed";
 
 // Worker pages
 import { WorkerHome } from "@/pages/worker/Home";
 import { JobDetail } from "@/pages/worker/JobDetail";
 import { WorkerProfile } from "@/pages/worker/Profile";
 import Checkout from "@/pages/worker/Checkout";
+import { WorkerEmergencyFeed } from "@/pages/worker/EmergencyFeed";
 
 // Admin pages
 import { AdminDashboard } from "@/pages/admin/Dashboard";
@@ -41,6 +43,9 @@ import { SpecialRequest } from "@/pages/admin/SpecialRequest";
 import { Services } from "@/pages/admin/Services";
 import { SystemLogs } from "@/pages/admin/SystemLogs";
 import { Income } from "@/pages/admin/Income";
+import { EmergencyList } from "@/pages/admin/EmergencyList";
+import { EmergencyCreate } from "@/pages/admin/EmergencyCreate";
+import { EmergencyDetail } from "@/pages/admin/EmergencyDetail";
 
 // Shared pages
 import { Notifications } from "@/pages/Notifications";
@@ -97,6 +102,7 @@ export default function App() {
               <Route path="/resident/request/:requestId/pay" element={<SubmitPayment />} />
               <Route path="/resident/request/:requestId/dispute" element={<FileDispute />} />
               <Route path="/resident/notifications" element={<Notifications />} />
+              <Route path="/resident/emergencies" element={<ResidentEmergencyFeed />} />
               <Route path="/resident/profile" element={<ResidentProfile />} />
             </Route>
           </Route>
@@ -109,6 +115,7 @@ export default function App() {
               <Route path="/worker/job/:requestId/dispute" element={<FileDispute />} />
               <Route path="/worker/checkout" element={<Checkout />} />
               <Route path="/worker/notifications" element={<Notifications />} />
+              <Route path="/worker/emergencies" element={<WorkerEmergencyFeed />} />
               <Route path="/worker/profile" element={<WorkerProfile />} />
             </Route>
           </Route>
@@ -131,6 +138,9 @@ export default function App() {
               <Route path="/admin/services" element={<Services />} />
               <Route path="/admin/logs" element={<SystemLogs />} />
               <Route path="/admin/notifications" element={<Notifications />} />
+              <Route path="/admin/emergencies" element={<EmergencyList />} />
+              <Route path="/admin/emergencies/new" element={<EmergencyCreate />} />
+              <Route path="/admin/emergencies/:emergencyId" element={<EmergencyDetail />} />
             </Route>
           </Route>
 

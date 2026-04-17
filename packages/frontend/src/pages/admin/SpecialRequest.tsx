@@ -9,8 +9,9 @@ import {
   Clock,
   HeartHandshake,
   AlertCircle,
+  LocateFixed,
 } from "lucide-react";
-import { MapContainer, TileLayer, Marker, useMapEvents } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from "react-leaflet";
 import api from "@/services/api";
 
 interface Category {
@@ -52,6 +53,16 @@ function MapClickHandler({
   return null;
 }
 
+function FlyToLocation({ position }: { position: [number, number] | null }) {
+  const map = useMap();
+  useEffect(() => {
+    if (position) {
+      map.flyTo(position, 16);
+    }
+  }, [position, map]);
+  return null;
+}
+
 export function SpecialRequest() {
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
@@ -60,10 +71,11 @@ export function SpecialRequest() {
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(
     null
   );
-  const [mapPosition] = useState<[number, number]>([10.3456, 123.9132]);
+  const [mapPosition, setMapPosition] = useState<[number, number]>([10.3456, 123.9132]);
   const [markerPosition, setMarkerPosition] = useState<[number, number] | null>(
     null
   );
+  const [isLocating, setIsLocating] = useState(false);
 
   const {
     register,
@@ -90,6 +102,7 @@ export function SpecialRequest() {
   useEffect(() => {
     if (latitude && longitude) {
       setMarkerPosition([latitude, longitude]);
+      setMapPosition([latitude, longitude]);
     }
   }, [latitude, longitude]);
 
@@ -107,12 +120,54 @@ export function SpecialRequest() {
     }
   }, [categoryId, categories]);
 
-  const handleLocationSelect = (lat: number, lng: number) => {
+  const handleLocationSelect = async (lat: number, lng: number) => {
     const roundedLat = Math.round(lat * 1000000) / 1000000;
     const roundedLng = Math.round(lng * 1000000) / 1000000;
     setValue("latitude", roundedLat);
     setValue("longitude", roundedLng);
-    toast.success("Location selected");
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`
+      );
+      const data = await response.json();
+      if (data.address) {
+        const addressParts = [
+          data.address.road,
+          data.address.suburb || data.address.village,
+          data.address.city || data.address.town,
+        ]
+          .filter(Boolean)
+          .join(", ");
+        if (addressParts) {
+          setValue("locationAddress", addressParts);
+        }
+      }
+      toast.success("Location selected");
+    } catch {
+      toast.success("Location selected (address lookup failed)");
+    }
+  };
+
+  const handleShareLocation = () => {
+    if (!navigator.geolocation) {
+      toast.error("Geolocation is not supported by your browser");
+      return;
+    }
+    setIsLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        await handleLocationSelect(pos.coords.latitude, pos.coords.longitude);
+        setIsLocating(false);
+      },
+      (error) => {
+        setIsLocating(false);
+        if (error.code === error.PERMISSION_DENIED) {
+          toast.error("Location permission denied. Please allow access in your browser settings.");
+        } else {
+          toast.error("Unable to retrieve your location");
+        }
+      }
+    );
   };
 
   const onSubmit = async (data: SpecialRequestFormData) => {
@@ -336,11 +391,22 @@ export function SpecialRequest() {
 
         {/* Location */}
         <div className="card space-y-4">
-          <h3 className="section-title flex items-center gap-2">
-            <MapPin size={18} /> Location
-          </h3>
+          <div className="flex items-center justify-between">
+            <h3 className="section-title flex items-center gap-2">
+              <MapPin size={18} /> Location
+            </h3>
+            <button
+              type="button"
+              onClick={handleShareLocation}
+              disabled={isLocating}
+              className="flex items-center gap-1.5 text-sm text-primary-600 hover:text-primary-700 font-medium disabled:opacity-50 transition-colors"
+            >
+              <LocateFixed size={16} className={isLocating ? "animate-pulse" : ""} />
+              {isLocating ? "Locating..." : "Use My Location"}
+            </button>
+          </div>
 
-          <div className="h-96 rounded-lg overflow-hidden border border-slate-200">
+          <div className="h-96 rounded-lg overflow-hidden border border-slate-200 isolate">
             <MapContainer
               center={mapPosition}
               zoom={15}
@@ -352,11 +418,12 @@ export function SpecialRequest() {
               />
               {markerPosition && <Marker position={markerPosition} />}
               <MapClickHandler onLocationSelect={handleLocationSelect} />
+              <FlyToLocation position={markerPosition} />
             </MapContainer>
           </div>
 
           <p className="text-sm text-slate-500">
-            Click on the map to select the beneficiary's location
+            Click on the map or use "Use My Location" to set the beneficiary's location
           </p>
 
           <div>
@@ -459,9 +526,6 @@ export function SpecialRequest() {
                 valueAsNumber: true,
               })}
             />
-            <p className="text-xs text-slate-500 mt-2">
-              Set to 0 for free/bayanihan services
-            </p>
           </div>
         </div>
 

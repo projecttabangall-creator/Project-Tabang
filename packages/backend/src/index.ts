@@ -11,6 +11,7 @@ import { workerRouter } from "./routes/worker.routes";
 import { paymentRouter } from "./routes/payment.routes";
 import { disputeRouter } from "./routes/dispute.routes";
 import { adminRouter } from "./routes/admin.routes";
+import { emergencyRouter } from "./routes/emergency.routes";
 
 // Import triggers
 import { onRequestCreated } from "./triggers/onRequestCreated";
@@ -36,6 +37,7 @@ app.use("/api/workers", workerRouter);
 app.use("/api/payments", paymentRouter);
 app.use("/api/disputes", disputeRouter);
 app.use("/api/admin", adminRouter);
+app.use("/api/emergencies", emergencyRouter);
 
 // Export as Firebase Cloud Function
 export const api = functions.https.onRequest(app);
