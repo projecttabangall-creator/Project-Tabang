@@ -91,14 +91,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Listen to auth state changes
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(firebaseAuth, async (user) => {
-      setFirebaseUser(user);
-      if (user) {
-        const profile = await fetchUserProfile(user.uid);
-        setUserProfile(profile);
-      } else {
+      try {
+        setFirebaseUser(user);
+        if (user) {
+          const profile = await fetchUserProfile(user.uid);
+          setUserProfile(profile);
+        } else {
+          setUserProfile(null);
+        }
+      } catch (error) {
+        console.error("Auth state change error:", error);
+        setFirebaseUser(null);
         setUserProfile(null);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     });
 
     return unsubscribe;

@@ -6,7 +6,27 @@ This guide assumes you already have the main branch files cloned into `~/project
 
 ## Quick Setup (First Time Only)
 
-If dependencies are not yet installed:
+### Step 0: Create `.env` file for Firebase configuration
+
+The `.env` file is **not in git** (it's gitignored for security). You must manually create it on the Raspberry Pi before building.
+
+Create `~/project-tabang/packages/frontend/.env`:
+
+```bash
+cat > ~/project-tabang/packages/frontend/.env <<'EOF'
+VITE_FIREBASE_API_KEY=AIzaSyDaJO7gYNrw5t8h_qliXLlWbUA_V4yIRT0
+VITE_FIREBASE_AUTH_DOMAIN=project-tabang---claude-code.firebaseapp.com
+VITE_FIREBASE_PROJECT_ID=project-tabang---claude-code
+VITE_FIREBASE_STORAGE_BUCKET=project-tabang---claude-code.firebasestorage.app
+VITE_FIREBASE_MESSAGING_SENDER_ID=140297914184
+VITE_FIREBASE_APP_ID=1:140297914184:web:292d48a65e4185c302d57d
+VITE_USE_EMULATOR=true
+EOF
+```
+
+⚠️ **Important**: `VITE_USE_EMULATOR=true` tells the app to connect to local emulators instead of production Firebase. This must be `true` for the Pi.
+
+### Step 1: Install dependencies (if not done yet)
 
 ```bash
 cd ~/project-tabang

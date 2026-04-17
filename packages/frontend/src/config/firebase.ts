@@ -18,8 +18,9 @@ export const firebaseAuth = getAuth(app);
 export const firestore = getFirestore(app);
 export const storage = getStorage(app);
 
-// Connect to emulators in development
-if (import.meta.env.DEV) {
+// Connect to emulators in development or when explicitly enabled
+const useEmulator = import.meta.env.DEV || import.meta.env.VITE_USE_EMULATOR === 'true';
+if (useEmulator) {
   try {
     connectAuthEmulator(firebaseAuth, "http://localhost:9099", {
       disableWarnings: true,
