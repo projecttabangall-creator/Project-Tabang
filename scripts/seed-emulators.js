@@ -184,6 +184,7 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error("Seed failed:", err.message);
+  console.error("Seed failed:", err.message || err);
+  if (err.stack) console.error(err.stack);
   process.exit(1);
 });
