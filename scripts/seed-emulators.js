@@ -9,9 +9,9 @@
 
 const admin = require("firebase-admin");
 
-// Point to local emulators
-process.env.FIRESTORE_EMULATOR_HOST = "localhost:8080";
-process.env.FIREBASE_AUTH_EMULATOR_HOST = "localhost:9099";
+// Point to local emulators (use 127.0.0.1 instead of localhost to avoid IPv6 issues on some systems)
+process.env.FIRESTORE_EMULATOR_HOST = "127.0.0.1:8080";
+process.env.FIREBASE_AUTH_EMULATOR_HOST = "127.0.0.1:9099";
 
 // Must match the project ID used by the frontend / firebase.json
 admin.initializeApp({ projectId: "project-tabang---claude-code" });
