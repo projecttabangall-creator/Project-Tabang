@@ -23,7 +23,13 @@ export function UserManagement() {
   const [roleFilter, setRoleFilter] = useState<string>("all");
 
   useEffect(() => {
-    fetchUsers();
+    setLoading(true);
+    const timeout = setTimeout(() => {
+      setLoading(false);
+      toast.error("Loading users took too long. Check if emulators are running.");
+    }, 5000);
+
+    fetchUsers().finally(() => clearTimeout(timeout));
   }, [roleFilter]);
 
   async function fetchUsers() {
@@ -31,7 +37,8 @@ export function UserManagement() {
       const params = roleFilter !== "all" ? `?role=${roleFilter}` : "";
       const { data } = await api.get(`/api/admin/users${params}`);
       setUsers(data.users);
-    } catch {
+    } catch (error) {
+      console.error("Failed to load users:", error);
       toast.error("Failed to load users");
     } finally {
       setLoading(false);

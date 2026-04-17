@@ -37,7 +37,13 @@ export function WorkerList() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
 
   useEffect(() => {
-    fetchWorkers();
+    setLoading(true);
+    const timeout = setTimeout(() => {
+      setLoading(false);
+      toast.error("Loading workers took too long. Check if emulators are running.");
+    }, 5000);
+
+    fetchWorkers().finally(() => clearTimeout(timeout));
   }, [statusFilter]);
 
   async function fetchWorkers() {
@@ -45,7 +51,8 @@ export function WorkerList() {
       const params = statusFilter !== "all" ? `?status=${statusFilter}` : "";
       const { data } = await api.get(`/api/workers${params}`);
       setWorkers(data.workers);
-    } catch {
+    } catch (error) {
+      console.error("Failed to load workers:", error);
       toast.error("Failed to load workers");
     } finally {
       setLoading(false);

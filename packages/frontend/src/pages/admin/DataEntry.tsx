@@ -39,14 +39,21 @@ export function DataEntry() {
   const itemForm = useForm<{ name: string; minPrice: number; isFree: boolean }>();
 
   useEffect(() => {
-    fetchCategories();
+    setLoading(true);
+    const timeout = setTimeout(() => {
+      setLoading(false);
+      toast.error("Loading categories took too long. Check if emulators are running.");
+    }, 5000);
+
+    fetchCategories().finally(() => clearTimeout(timeout));
   }, []);
 
   async function fetchCategories() {
     try {
       const { data } = await api.get("/api/categories");
       setCategories(data.categories);
-    } catch {
+    } catch (error) {
+      console.error("Failed to load categories:", error);
       toast.error("Failed to load categories");
     } finally {
       setLoading(false);
