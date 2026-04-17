@@ -13,6 +13,7 @@ import {
   updateSchedule,
   updateLocation,
   logFingerprintVerification,
+  updateBiometric,
 } from "../controllers/worker.controller";
 
 export const workerRouter = Router();
@@ -47,6 +48,9 @@ workerRouter.patch("/:id/schedule", roleGuard("worker"), updateSchedule);
 
 // PATCH /api/workers/:id/location — update GPS coordinates
 workerRouter.patch("/:id/location", roleGuard("worker"), updateLocation);
+
+// PATCH /api/workers/:id/biometric — update biometric enrollment status (admin)
+workerRouter.patch("/:id/biometric", roleGuard("admin"), updateBiometric);
 
 // POST /api/workers/:id/verify-fingerprint — log fingerprint verification (worker/admin)
 workerRouter.post(

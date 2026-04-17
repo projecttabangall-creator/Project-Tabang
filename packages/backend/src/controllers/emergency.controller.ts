@@ -347,7 +347,7 @@ export async function applyToEmergency(
     const newApplicant = {
       workerId: workerUid,
       workerName,
-      appliedAt: FieldValue.serverTimestamp(),
+      appliedAt: Timestamp.now(),
       approvalStatus: APPLICANT_STATUSES.PENDING,
     };
 

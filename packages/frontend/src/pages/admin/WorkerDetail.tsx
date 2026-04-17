@@ -6,6 +6,7 @@ import {
   CheckCircle,
   Clock,
   FileText,
+  Fingerprint,
   Mail,
   MapPin,
   Phone,
@@ -18,6 +19,7 @@ import {
   XCircle,
 } from "lucide-react";
 import api from "@/services/api";
+import { firebaseAuth } from "@/config/firebase";
 import { BackButton } from "@/components/common/BackButton";
 import { getWorkerCredentialLabel } from "@/constants/workerCredentials";
 import { uploadFile } from "@/utils/uploadFile";
@@ -133,6 +135,8 @@ export function WorkerDetail() {
   const [credentialDrafts, setCredentialDrafts] = useState<WorkerCredentialDraft[]>(
     []
   );
+  const [enrolling, setEnrolling] = useState(false);
+  const [enrollError, setEnrollError] = useState<string | null>(null);
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const loadWorkerDetail = useCallback(async () => {
@@ -191,6 +195,42 @@ export function WorkerDetail() {
       toast.error("Failed to verify worker");
     } finally {
       setVerifying(false);
+    }
+  }
+
+  async function handleEnrollFingerprint() {
+    if (!workerId || !worker) return;
+
+    setEnrolling(true);
+    setEnrollError(null);
+    try {
+      const token = await firebaseAuth.currentUser?.getIdToken();
+      const res = await fetch("http://localhost:5000/fingerprint/enroll", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workerId, adminToken: token }),
+      });
+      const result = await res.json();
+      if (result.success) {
+        toast.success("Fingerprint enrolled successfully");
+        setWorker((prev) =>
+          prev
+            ? {
+                ...prev,
+                workerData: {
+                  ...prev.workerData!,
+                  biometricEnrolled: true,
+                },
+              }
+            : prev
+        );
+      } else {
+        setEnrollError(result.error || "Enrollment failed");
+      }
+    } catch {
+      setEnrollError("Fingerprint service unavailable. Is it running on port 5000?");
+    } finally {
+      setEnrolling(false);
     }
   }
 
@@ -475,10 +515,35 @@ export function WorkerDetail() {
               </p>
             </div>
             <div className="bg-slate-50 rounded-lg px-4 py-3">
-              <p className="text-slate-500">Biometric</p>
-              <p className="font-medium">
-                {worker.workerData?.biometricEnrolled ? "Enrolled" : "Not Enrolled"}
-              </p>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-slate-500">Biometric</p>
+                {worker.workerData?.biometricEnrolled && (
+                  <button
+                    onClick={handleEnrollFingerprint}
+                    disabled={enrolling}
+                    className="text-xs px-2 py-1 bg-slate-200 hover:bg-slate-300 disabled:opacity-50 rounded text-slate-700 font-medium transition"
+                  >
+                    {enrolling ? "Enrolling..." : "Re-enroll"}
+                  </button>
+                )}
+              </div>
+              <div className="flex items-center justify-between">
+                <p className="font-medium">
+                  {worker.workerData?.biometricEnrolled ? "Enrolled" : "Not Enrolled"}
+                </p>
+                {!worker.workerData?.biometricEnrolled && (
+                  <button
+                    onClick={handleEnrollFingerprint}
+                    disabled={enrolling}
+                    className="text-xs px-3 py-1 bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-white rounded font-medium transition"
+                  >
+                    {enrolling ? "Enrolling..." : "Enroll"}
+                  </button>
+                )}
+              </div>
+              {enrollError && (
+                <p className="text-xs text-red-600 mt-2">{enrollError}</p>
+              )}
             </div>
             <div className="bg-slate-50 rounded-lg px-4 py-3">
               <p className="text-slate-500">Account Status</p>
@@ -779,6 +844,23 @@ export function WorkerDetail() {
           </div>
         )}
       </div>
+
+      {/* Fingerprint Enrollment Modal */}
+      {enrolling && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-lg p-6 max-w-sm w-full mx-4">
+            <div className="flex flex-col items-center gap-4">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+              <h3 className="text-lg font-semibold text-slate-900">Fingerprint Enrollment in Progress</h3>
+              <div className="text-sm text-slate-600 space-y-2 text-center">
+                <p>1. Ask the worker to place their finger on the AS608 scanner.</p>
+                <p>2. Wait for the sensor to beep, then have them lift and place their finger a second time.</p>
+                <p>3. Do not close this window until enrollment is complete.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

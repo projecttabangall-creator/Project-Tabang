@@ -73,7 +73,7 @@ def enroll():
         if admin_token:
             headers["Authorization"] = f"Bearer {admin_token}"
         resp = http_requests.patch(
-            f"{API_BASE_URL}/workers/{worker_id}",
+            f"{API_BASE_URL}/workers/{worker_id}/biometric",
             json={"biometricEnrolled": True},
             headers=headers,
             timeout=10

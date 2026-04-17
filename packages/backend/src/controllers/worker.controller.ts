@@ -759,3 +759,32 @@ export async function logFingerprintVerification(
     res.status(500).json({ error: "Failed to log fingerprint verification" });
   }
 }
+
+/**
+ * PATCH /api/workers/:id/biometric
+ * Admin updates worker's biometric enrollment status.
+ * Called by: fingerprint-service after enrollment, and admin UI for manual toggle.
+ */
+export async function updateBiometric(
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> {
+  const id = req.params.id as string;
+  const { biometricEnrolled } = req.body;
+
+  try {
+    if (typeof biometricEnrolled !== "boolean") {
+      res.status(400).json({ error: "biometricEnrolled must be a boolean" });
+      return;
+    }
+
+    await usersRef.doc(id).update({
+      "workerData.biometricEnrolled": biometricEnrolled,
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Update biometric error:", error);
+    res.status(500).json({ error: "Failed to update biometric status" });
+  }
+}
