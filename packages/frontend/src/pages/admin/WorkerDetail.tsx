@@ -6,7 +6,6 @@ import {
   CheckCircle,
   Clock,
   FileText,
-  Fingerprint,
   Mail,
   MapPin,
   Phone,
