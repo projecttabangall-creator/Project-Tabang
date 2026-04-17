@@ -50,9 +50,10 @@ export function WorkerList() {
     try {
       const params = statusFilter !== "all" ? `?status=${statusFilter}` : "";
       const { data } = await api.get(`/api/workers${params}`);
-      setWorkers(data.workers);
+      setWorkers(data.workers || []);
     } catch (error) {
       console.error("Failed to load workers:", error);
+      setWorkers([]);
       toast.error("Failed to load workers");
     } finally {
       setLoading(false);

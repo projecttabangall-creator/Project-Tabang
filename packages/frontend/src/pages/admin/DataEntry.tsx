@@ -51,9 +51,10 @@ export function DataEntry() {
   async function fetchCategories() {
     try {
       const { data } = await api.get("/api/categories");
-      setCategories(data.categories);
+      setCategories(data.categories || []);
     } catch (error) {
       console.error("Failed to load categories:", error);
+      setCategories([]);
       toast.error("Failed to load categories");
     } finally {
       setLoading(false);

@@ -36,9 +36,10 @@ export function UserManagement() {
     try {
       const params = roleFilter !== "all" ? `?role=${roleFilter}` : "";
       const { data } = await api.get(`/api/admin/users${params}`);
-      setUsers(data.users);
+      setUsers(data.users || []);
     } catch (error) {
       console.error("Failed to load users:", error);
+      setUsers([]);
       toast.error("Failed to load users");
     } finally {
       setLoading(false);
