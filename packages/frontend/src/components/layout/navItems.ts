@@ -46,6 +46,7 @@ export function getNavItems(role: string): NavItem[] {
         { to: "/admin/payments", icon: CreditCard, label: "Payments" },
         { to: "/admin/income", icon: TrendingUp, label: "Income" },
         { to: "/admin/disputes", icon: AlertTriangle, label: "Disputes" },
+        { to: "/admin/notifications", icon: Bell, label: "Notifications" },
         { to: "/admin/users", icon: Users, label: "Users" },
         { to: "/admin/workers", icon: Wrench, label: "Workers" },
         { to: "/admin/data-entry", icon: Settings, label: "Data Entry" },

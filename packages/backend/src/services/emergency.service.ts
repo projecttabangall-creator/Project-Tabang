@@ -17,6 +17,8 @@ export async function uploadEmergencyPhotos(
   const results = await Promise.all(
     files.map(async (dataUrl, i) => {
       if (!dataUrl.startsWith("data:")) {
+        // Only allow https:// pass-through URLs (e.g. already-uploaded Storage URLs)
+        if (!dataUrl.startsWith("https://")) return "";
         return dataUrl;
       }
       try {

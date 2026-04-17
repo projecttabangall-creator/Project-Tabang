@@ -3,10 +3,12 @@ import { MobileNav } from "./MobileNav";
 import { useAuth } from "@/contexts/AuthContext";
 import { LogOut } from "lucide-react";
 import { getNavItems } from "./navItems";
+import { useUnreadNotifications } from "@/hooks/useUnreadNotifications";
 import logoWithText from "@Assets/logo-with-text.png";
 
 export function AppLayout() {
   const { userProfile, signOut } = useAuth();
+  const unreadCount = useUnreadNotifications();
 
   const navItems = userProfile ? getNavItems(userProfile.role) : [];
 
@@ -65,7 +67,12 @@ export function AppLayout() {
                     }`
                   }
                 >
-                  <item.icon size={18} />
+                  <div className="relative">
+                    <item.icon size={18} />
+                    {item.to.includes("notifications") && unreadCount > 0 && (
+                      <span className="absolute -top-1 -right-1 w-2 h-2 bg-rose-500 rounded-full" />
+                    )}
+                  </div>
                   <span>{item.label}</span>
                 </NavLink>
               ))}
@@ -82,7 +89,7 @@ export function AppLayout() {
       </div>
 
       {/* Mobile bottom navigation */}
-      <MobileNav />
+      <MobileNav unreadCount={unreadCount} />
     </div>
   );
 }

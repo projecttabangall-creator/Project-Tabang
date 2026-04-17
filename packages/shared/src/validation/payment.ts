@@ -27,7 +27,7 @@ export const fileDisputeSchema = z.object({
 export const resolveDisputeSchema = z.object({
   resolution: z.enum(["favor_resident", "favor_worker", "partial", "escalated"]),
   resolutionNotes: z.string().min(1, "Resolution notes are required"),
-  priceAdjustment: z.number().optional(),
+  priceAdjustment: z.number().min(-100000).max(100000).optional(),
   creditDeductions: z
     .array(
       z.object({

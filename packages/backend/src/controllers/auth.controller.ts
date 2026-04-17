@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import { createHash } from "crypto";
 import { auth, db } from "../config/firebase";
 import { AuthenticatedRequest } from "../middleware/auth";
 import {
@@ -9,6 +10,10 @@ import {
   ROLES,
 } from "@tabang/shared";
 import { FieldValue } from "firebase-admin/firestore";
+
+function hashOtp(otp: string): string {
+  return createHash("sha256").update(otp).digest("hex");
+}
 
 /**
  * POST /api/auth/register
@@ -69,9 +74,9 @@ export async function registerResident(
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const otpExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
-    // Store OTP in a subcollection (or separate collection)
+    // Store hashed OTP — never store plaintext OTPs
     await db.collection("otps").doc(userRecord.uid).set({
-      otp, // In production, hash this
+      otpHash: hashOtp(otp),
       expiresAt: otpExpiry,
       contactNumber: body.contactNumber,
       createdAt: new Date(),
@@ -138,8 +143,8 @@ export async function verifyOtp(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    // Check OTP match
-    if (otpData.otp !== body.otp) {
+    // Check OTP match against stored hash
+    if (otpData.otpHash !== hashOtp(body.otp)) {
       res.status(400).json({ error: "Invalid OTP" });
       return;
     }
@@ -263,7 +268,7 @@ export async function resetPassword(
     const otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
 
     await db.collection("otps").doc(userId).set({
-      otp,
+      otpHash: hashOtp(otp),
       expiresAt: otpExpiry,
       contactNumber,
       type: "password_reset",
@@ -322,7 +327,7 @@ export async function confirmResetPassword(
       return;
     }
 
-    if (otpData.otp !== otp) {
+    if (otpData.otpHash !== hashOtp(otp)) {
       res.status(400).json({ error: "Invalid OTP" });
       return;
     }

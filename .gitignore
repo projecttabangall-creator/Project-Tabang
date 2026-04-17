@@ -15,6 +15,7 @@ lib/
 firebase-debug.log
 firestore-debug.log
 ui-debug.log
+emulator-data/
 
 # IDE
 .vscode/

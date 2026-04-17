@@ -361,7 +361,7 @@ export function EmergencyCreate() {
           <h3 className="section-title flex items-center gap-2">
             <MapPin size={18} /> Location
           </h3>
-          <div className="h-80 rounded-lg overflow-hidden border border-slate-200">
+          <div className="h-80 rounded-lg overflow-hidden border border-slate-200 isolate">
             <MapContainer
               center={[10.3456, 123.9132]}
               zoom={15}

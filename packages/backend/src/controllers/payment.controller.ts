@@ -201,13 +201,14 @@ export async function getPendingPayments(
 
 /**
  * GET /api/payments/:id
- * Get single payment detail
+ * Get single payment detail — admin always allowed; resident/worker only if they own the payment.
  */
 export async function getPayment(
   req: AuthenticatedRequest,
   res: Response
 ): Promise<void> {
   const paymentId = req.params.id as string;
+  const { uid, role } = req.user!;
 
   try {
     const doc = await paymentsRef.doc(paymentId).get();
@@ -216,7 +217,14 @@ export async function getPayment(
       return;
     }
 
-    res.json({ payment: { id: doc.id, ...doc.data() } });
+    const payment = doc.data()!;
+
+    if (role !== "admin" && payment.residentId !== uid && payment.workerId !== uid) {
+      res.status(403).json({ error: "Access denied" });
+      return;
+    }
+
+    res.json({ payment: { id: doc.id, ...payment } });
   } catch (error) {
     console.error("Get payment error:", error);
     res.status(500).json({ error: "Failed to fetch payment" });

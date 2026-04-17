@@ -51,6 +51,8 @@ export async function createEmergency(
   const body = req.body as CreateEmergencyInput;
 
   try {
+    console.log("Creating emergency with body:", { ...body, photoUrls: body.photoUrls?.map(u => u.substring(0, 50) + "...") });
+
     // Look up category names for denormalization
     const categoryDocs = await Promise.all(
       body.categoryIds.map((id) => categoriesRef.doc(id).get())
@@ -61,11 +63,13 @@ export async function createEmergency(
       return;
     }
     const categoryNames = categoryDocs.map((d) => d.data()!.name as string);
+    console.log("Category names:", categoryNames);
 
     const now = new Date();
     const expiresAt = new Date(
       now.getTime() + body.durationHours * 60 * 60 * 1000
     );
+    console.log("Calculated expiry time:", expiresAt);
 
     // Create the doc first (so we have an ID for the photo path), then attach photos.
     const docRef = await emergenciesRef.add({
@@ -88,11 +92,14 @@ export async function createEmergency(
       applicants: [],
       createdAt: FieldValue.serverTimestamp(),
     });
+    console.log("Created emergency doc:", docRef.id);
 
     const photoUrls = await uploadEmergencyPhotos(
       body.photoUrls ?? [],
       docRef.id
     );
+    console.log("Uploaded photos:", photoUrls);
+
     if (photoUrls.length) {
       await docRef.update({ photoUrls });
     }
@@ -103,6 +110,7 @@ export async function createEmergency(
       categoryIds: body.categoryIds,
       locationAddress: body.locationAddress,
     });
+    console.log("Broadcast complete:", { residents, workers });
 
     await db.collection("systemLogs").add({
       action: "emergency_created",
@@ -119,7 +127,11 @@ export async function createEmergency(
     });
   } catch (error) {
     console.error("Create emergency error:", error);
-    res.status(500).json({ error: "Failed to create emergency" });
+    if (error instanceof Error) {
+      res.status(500).json({ error: error.message });
+    } else {
+      res.status(500).json({ error: "Failed to create emergency" });
+    }
   }
 }
 
@@ -335,7 +347,7 @@ export async function applyToEmergency(
     const newApplicant = {
       workerId: workerUid,
       workerName,
-      appliedAt: new Date(),
+      appliedAt: FieldValue.serverTimestamp(),
       approvalStatus: APPLICANT_STATUSES.PENDING,
     };
 
@@ -393,7 +405,7 @@ export async function reviewApplicant(
     applicants[idx] = {
       ...applicants[idx],
       approvalStatus: body.approvalStatus,
-      approvedAt: new Date(),
+      approvedAt: FieldValue.serverTimestamp(),
     };
 
     await emergenciesRef.doc(id).update({ applicants });
@@ -446,6 +458,10 @@ export async function awardApplicantCredits(
       return;
     }
     const data = emergencyDoc.data()!;
+    if (data.status !== EMERGENCY_STATUSES.COMPLETED) {
+      res.status(400).json({ error: "Credits can only be awarded after the emergency is completed" });
+      return;
+    }
     const applicants = (data.applicants ?? []) as any[];
     const idx = applicants.findIndex((a) => a.workerId === workerId);
     if (idx === -1) {
@@ -462,7 +478,7 @@ export async function awardApplicantCredits(
     applicants[idx] = {
       ...applicants[idx],
       creditAwarded: body.amount,
-      awardedAt: new Date(),
+      awardedAt: FieldValue.serverTimestamp(),
     };
 
     await emergenciesRef.doc(id).update({ applicants });

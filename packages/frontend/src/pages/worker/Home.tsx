@@ -35,6 +35,7 @@ export function WorkerHome() {
   const { userProfile } = useAuth();
   const [isLoading, setIsLoading] = useState(true);
   const [isAvailable, setIsAvailable] = useState(true);
+  const [isTogglingAvailability, setIsTogglingAvailability] = useState(false);
   const [pendingRequests, setPendingRequests] = useState<Request[]>([]);
   const [ongoingRequests, setOngoingRequests] = useState<Request[]>([]);
 
@@ -68,16 +69,61 @@ export function WorkerHome() {
     }
   };
 
+  const getLocationOrEmpty = async (): Promise<{ latitude?: number; longitude?: number }> => {
+    return new Promise((resolve) => {
+      if (!navigator.geolocation) {
+        toast.warning("Location unavailable — assignment accuracy may be reduced");
+        resolve({});
+        return;
+      }
+
+      setIsTogglingAvailability(true);
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          setIsTogglingAvailability(false);
+          resolve({
+            latitude: pos.coords.latitude,
+            longitude: pos.coords.longitude,
+          });
+        },
+        (error) => {
+          setIsTogglingAvailability(false);
+          if (error.code === error.PERMISSION_DENIED) {
+            toast.warning("Location permission denied — assignment accuracy may be reduced");
+          } else {
+            toast.warning("Unable to retrieve location — proceeding without it");
+          }
+          resolve({});
+        }
+      );
+    });
+  };
+
   const toggleAvailability = async () => {
     const newAvailability = !isAvailable;
+    const uid = userProfile?.uid;
+    if (!uid) {
+      toast.error("User not found");
+      return;
+    }
+
+    setIsTogglingAvailability(true);
     try {
-      await api.patch(`/api/workers/${userProfile?.uid}/availability`);
+      // If turning ON, capture location first
+      let body: { latitude?: number; longitude?: number } = {};
+      if (newAvailability) {
+        body = await getLocationOrEmpty();
+      }
+
+      await api.patch(`/api/workers/${uid}/availability`, body);
       setIsAvailable(newAvailability);
       toast.success(
         `You are now ${newAvailability ? "available" : "unavailable"}`
       );
     } catch {
       toast.error("Failed to update availability");
+    } finally {
+      setIsTogglingAvailability(false);
     }
   };
 
@@ -102,14 +148,19 @@ export function WorkerHome() {
         </div>
         <button
           onClick={toggleAvailability}
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
+          disabled={isTogglingAvailability}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 ${
             isAvailable
               ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
               : "bg-slate-100 text-slate-700 hover:bg-slate-200"
           }`}
         >
-          <Power size={18} />
-          {isAvailable ? "Available" : "Unavailable"}
+          {isTogglingAvailability ? (
+            <div className="animate-spin rounded-full h-4 w-4 border-2 border-current border-t-transparent" />
+          ) : (
+            <Power size={18} />
+          )}
+          {isTogglingAvailability ? "Getting location..." : isAvailable ? "Available" : "Unavailable"}
         </button>
       </div>
 

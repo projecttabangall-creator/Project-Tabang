@@ -515,6 +515,10 @@ export async function toggleAvailability(
   res: Response
 ): Promise<void> {
   const id = req.params.id as string;
+  const { latitude, longitude } = req.body as {
+    latitude?: number;
+    longitude?: number;
+  };
 
   if (req.user!.uid !== id) {
     res.status(403).json({ error: "Can only update your own availability" });
@@ -533,10 +537,21 @@ export async function toggleAvailability(
     const current = doc.data()!.workerData?.isAvailable || false;
     const newAvailability = !current;
 
-    await docRef.update({
+    // If toggling ON and location provided, update workerData.location
+    const updateData: Record<string, any> = {
       "workerData.isAvailable": newAvailability,
       updatedAt: FieldValue.serverTimestamp(),
-    });
+    };
+
+    if (
+      newAvailability &&
+      typeof latitude === "number" &&
+      typeof longitude === "number"
+    ) {
+      updateData["workerData.location"] = new GeoPoint(latitude, longitude);
+    }
+
+    await docRef.update(updateData);
 
     // If turning availability ON, scan for pending requests in this worker's category
     if (newAvailability) {
@@ -604,34 +619,36 @@ export async function updateSchedule(
       updatedAt: FieldValue.serverTimestamp(),
     });
 
-    // After schedule update, scan for pending requests and attempt assignment
+    // Respond immediately — the save succeeded
+    res.json({ message: "Schedule updated", availability });
+
+    // Fire-and-forget: scan for pending requests in the background
+    // Errors here must not affect the response already sent above
     const workerData = doc.data()!.workerData;
     const categoryId = workerData?.specialization;
     const isWorkerAvailable = workerData?.isAvailable;
 
     if (categoryId && isWorkerAvailable) {
-      // Find all pending requests in this category
-      const pendingRequests = await db
-        .collection("serviceRequests")
+      db.collection("serviceRequests")
         .where("categoryId", "==", categoryId)
         .where("status", "==", "pending")
-        .where("assignedWorkerId", "==", undefined)
-        .get();
-
-      // Attempt assignment for each pending request
-      for (const requestDoc of pendingRequests.docs) {
-        try {
-          await attemptRequestAssignment(requestDoc.id, requestDoc.data());
-        } catch (assignmentError) {
-          console.error(
-            `Failed to reassign pending request ${requestDoc.id}:`,
-            assignmentError
-          );
-        }
-      }
+        .where("assignedWorkerId", "==", null)
+        .get()
+        .then((pendingRequests) => {
+          for (const requestDoc of pendingRequests.docs) {
+            attemptRequestAssignment(requestDoc.id, requestDoc.data()).catch(
+              (assignmentError) =>
+                console.error(
+                  `Failed to reassign pending request ${requestDoc.id}:`,
+                  assignmentError
+                )
+            );
+          }
+        })
+        .catch((err) =>
+          console.error("Schedule scan for pending requests failed:", err)
+        );
     }
-
-    res.json({ message: "Schedule updated", availability });
   } catch (error) {
     console.error("Update schedule error:", error);
     res.status(500).json({ error: "Failed to update schedule" });

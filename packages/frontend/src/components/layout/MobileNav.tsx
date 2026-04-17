@@ -2,7 +2,11 @@ import { NavLink } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { getNavItems } from "./navItems";
 
-export function MobileNav() {
+interface MobileNavProps {
+  unreadCount?: number;
+}
+
+export function MobileNav({ unreadCount = 0 }: MobileNavProps) {
   const { userProfile } = useAuth();
 
   if (!userProfile) return null;
@@ -22,7 +26,12 @@ export function MobileNav() {
               ${isActive ? "text-accent-600" : "text-slate-400 hover:text-slate-600"}`
             }
           >
-            <item.icon size={20} />
+            <div className="relative">
+              <item.icon size={20} />
+              {item.to.includes("notifications") && unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 w-2 h-2 bg-rose-500 rounded-full" />
+              )}
+            </div>
             <span className="line-clamp-1">{item.label}</span>
           </NavLink>
         ))}
