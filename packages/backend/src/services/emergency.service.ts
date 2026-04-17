@@ -13,7 +13,7 @@ export async function uploadEmergencyPhotos(
   emergencyId: string
 ): Promise<string[]> {
   if (!files?.length) return [];
-  const bucket = storage.bucket();
+  const bucket = storage.bucket("project-tabang---claude-code.appspot.com");
   const results = await Promise.all(
     files.map(async (dataUrl, i) => {
       if (!dataUrl.startsWith("data:")) {

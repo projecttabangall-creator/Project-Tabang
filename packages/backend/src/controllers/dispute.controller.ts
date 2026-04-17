@@ -108,7 +108,7 @@ async function uploadEvidenceFiles(
   files: string[],
   requestId: string
 ): Promise<string[]> {
-  const bucket = storage.bucket();
+  const bucket = storage.bucket("project-tabang---claude-code.appspot.com");
   return Promise.all(
     files.map(async (dataUrl, i) => {
       // If already a real URL (not base64), pass through
