@@ -34,7 +34,7 @@ export function Income() {
     setIsLoading(true);
     try {
       const { data } = await api.get(`/api/admin/income?period=${period}`);
-      setSummary(data.summary);
+      setSummary(data.summary || null);
       setBreakdown(data.breakdown || []);
     } catch {
       toast.error("Failed to load income data");

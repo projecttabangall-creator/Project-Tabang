@@ -100,18 +100,18 @@ export function JobDetail() {
   const fetchRequest = async () => {
     try {
       const { data } = await api.get(`/api/requests/${jobId}`);
-      const currentRequest = data.request;
+      const currentRequest = data.request || null;
       setRequest(currentRequest);
 
-      if (currentRequest.pendingFinalPrice) {
+      if (currentRequest?.pendingFinalPrice) {
         setFinalPrice(currentRequest.pendingFinalPrice.toString());
-      } else if (currentRequest.finalPrice) {
+      } else if (currentRequest?.finalPrice) {
         setFinalPrice(currentRequest.finalPrice.toString());
       } else {
         setFinalPrice("");
       }
 
-      setPriceChangeReason(currentRequest.priceChangeReason || "");
+      setPriceChangeReason(currentRequest?.priceChangeReason || "");
     } catch {
       toast.error("Failed to load job details");
       navigate("/worker/home");

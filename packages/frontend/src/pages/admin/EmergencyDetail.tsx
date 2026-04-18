@@ -76,7 +76,15 @@ export function EmergencyDetail() {
           setLoading(false);
           return;
         }
-        setEmergency({ id: snap.id, ...(snap.data() as any) });
+        const d = snap.data()!;
+        setEmergency({
+          id: snap.id,
+          ...d,
+          applicants: Array.isArray(d.applicants) ? d.applicants : [],
+          categoryNames: Array.isArray(d.categoryNames) ? d.categoryNames : [],
+          photoUrls: Array.isArray(d.photoUrls) ? d.photoUrls : [],
+          needsList: Array.isArray(d.needsList) ? d.needsList : [],
+        } as any);
         setLoading(false);
       },
       () => setLoading(false)

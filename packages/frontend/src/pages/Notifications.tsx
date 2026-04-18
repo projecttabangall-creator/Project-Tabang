@@ -113,10 +113,20 @@ export function Notifications() {
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
-        const items = snapshot.docs.map((d) => ({
-          id: d.id,
-          ...d.data(),
-        })) as NotificationItem[];
+        const items = snapshot.docs.map((d) => {
+          const data = d.data();
+          return {
+            id: d.id,
+            userId: data.userId || "",
+            type: data.type || "system",
+            title: data.title || "",
+            body: data.body || "",
+            referenceType: data.referenceType || "",
+            referenceId: data.referenceId || "",
+            isRead: data.isRead ?? false,
+            createdAt: data.createdAt,
+          };
+        }) as NotificationItem[];
         setNotifications(items);
         setLoading(false);
       },

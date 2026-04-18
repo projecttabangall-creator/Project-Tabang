@@ -149,7 +149,7 @@ export function WorkerDetail() {
           api.get("/api/categories"),
         ]);
 
-      setWorker(workerResponse.worker);
+      setWorker(workerResponse.worker || null);
       setCategories(categoryResponse.categories || []);
     } catch {
       toast.error("Failed to load worker details");

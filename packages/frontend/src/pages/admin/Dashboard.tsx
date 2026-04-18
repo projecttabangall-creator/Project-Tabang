@@ -34,8 +34,20 @@ export function AdminDashboard() {
   useEffect(() => {
     api
       .get("/api/admin/dashboard")
-      .then(({ data }) => setStats(data))
-      .catch(() => toast.error("Failed to load dashboard stats"))
+      .then(({ data }) => setStats({
+        totalResidents: data?.totalResidents || 0,
+        totalWorkers: data?.totalWorkers || 0,
+        pendingVerifications: data?.pendingVerifications || 0,
+        totalRequests: data?.totalRequests || 0,
+        activeRequests: data?.activeRequests || 0,
+        completedJobs: data?.completedJobs || 0,
+        pendingPayments: data?.pendingPayments || 0,
+        openDisputes: data?.openDisputes || 0,
+      }))
+      .catch((error) => {
+        console.error("Failed to load dashboard stats:", error);
+        toast.error("Failed to load dashboard stats");
+      })
       .finally(() => setLoading(false));
   }, []);
 

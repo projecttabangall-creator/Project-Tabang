@@ -59,8 +59,12 @@ export function WorkerRegistration() {
   useEffect(() => {
     api
       .get("/api/categories")
-      .then(({ data }) => setCategories(data.categories))
-      .catch(() => toast.error("Failed to load categories"));
+      .then(({ data }) => setCategories(data.categories || []))
+      .catch((error) => {
+        console.error("Failed to load categories:", error);
+        setCategories([]);
+        toast.error("Failed to load categories");
+      });
   }, []);
 
   function addCredentialDraft() {

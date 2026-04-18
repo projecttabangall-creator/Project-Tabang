@@ -69,8 +69,8 @@ export function RequestDetail() {
   const fetchRequest = async () => {
     try {
       const { data } = await api.get(`/api/requests/${requestId}`);
-      setRequest(data.request);
-      if (typeof data.request.yourRating === "number") {
+      setRequest(data.request || null);
+      if (data.request && typeof data.request.yourRating === "number") {
         setRating(data.request.yourRating);
       }
     } catch (error: any) {
