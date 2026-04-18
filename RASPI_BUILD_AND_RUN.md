@@ -66,9 +66,9 @@ npm run build -w packages/frontend
 
 ---
 
-## Seeding Test Data (One Time Setup)
+## Seeding Test Data (First Time Only)
 
-After starting the Firebase emulators for the first time, you need to seed test accounts and data.
+After starting the emulators for the **very first time**, seed the test accounts:
 
 **In a 4th terminal:**
 
@@ -82,7 +82,7 @@ This creates 3 test accounts:
 - **Worker**: Contact `09281234567` | Password `Password123`
 - **Resident**: Contact `09171234567` | Password `Password123`
 
-> Run this once after starting the emulators. It only needs to be done once unless you delete the emulator data.
+> **Only run once.** When you stop the emulators with `--export-on-exit`, all data is saved to `./emulator-data/`. The next time you start, it reloads automatically — no need to seed again.
 
 ---
 
@@ -94,7 +94,7 @@ You need **3 separate terminal windows/sessions** running simultaneously.
 
 ```bash
 cd ~/project-tabang
-npx firebase emulators:start --import=./emulator-data
+npx firebase emulators:start --import=./emulator-data --export-on-exit
 ```
 
 **Expected output:**
@@ -152,7 +152,7 @@ serve -s packages/frontend/dist -l 3000
 - [ ] Terminal 1 running: Firebase Emulators (port 9099, 8080, 5001, 5002, 4001)
 - [ ] Terminal 2 running: Fingerprint Service (port 5000)
 - [ ] Terminal 3 running: Frontend Server (port 3000)
-- [ ] Terminal 4 (once): Run `npm run seed` to create test accounts
+- [ ] Terminal 4 (first time only): Run `npm run seed` to create test accounts
 - [ ] All three services show "started successfully" or equivalent
 - [ ] Access the app at `http://localhost:3000` on the Pi's Chromium browser
 - [ ] Log in with admin account: `09391234567` / `Password123`
