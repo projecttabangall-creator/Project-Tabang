@@ -47,8 +47,8 @@ export function Landing() {
 
       {/* Hero Section */}
       <section
-        className="relative px-4 py-32 text-center"
-        style={{ backgroundImage: `url(${heroBg})`, backgroundSize: "cover", backgroundPosition: "center" }}
+        className="relative px-4 py-32 text-center bg-center bg-cover bg-no-repeat"
+        style={{ backgroundImage: `url(${heroBg})`, backgroundSize: "cover", backgroundPosition: "center center", backgroundAttachment: "fixed" }}
       >
         {/* Dark overlay for text contrast */}
         <div className="absolute inset-0 bg-black/50" />

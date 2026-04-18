@@ -42,6 +42,14 @@
         { "fieldPath": "role", "order": "ASCENDING" },
         { "fieldPath": "accountStatus", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "emergencies",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

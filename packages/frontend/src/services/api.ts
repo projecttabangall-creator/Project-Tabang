@@ -3,8 +3,10 @@ import { firebaseAuth } from "@/config/firebase";
 
 const projectId = import.meta.env.VITE_FIREBASE_PROJECT_ID;
 
+const useEmulator = import.meta.env.DEV || import.meta.env.VITE_USE_EMULATOR === 'true';
+
 const api = axios.create({
-  baseURL: import.meta.env.DEV
+  baseURL: useEmulator
     ? `http://localhost:5001/${projectId}/us-central1/api`
     : "",
   headers: {
