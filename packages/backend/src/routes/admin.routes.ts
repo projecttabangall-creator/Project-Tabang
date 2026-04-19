@@ -5,6 +5,7 @@ import { roleGuard } from "../middleware/roleGuard";
 import { validate } from "../middleware/validate";
 import {
   adjustCreditPoints,
+  getAnalyticsStats,
   getConfig,
   getDashboardStats,
   getIncomeStats,
@@ -33,3 +34,4 @@ adminRouter.post(
   createSpecialRequest
 );
 adminRouter.get("/income", getIncomeStats);
+adminRouter.get("/analytics", getAnalyticsStats);

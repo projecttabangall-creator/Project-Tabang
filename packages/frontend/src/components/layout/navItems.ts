@@ -13,6 +13,7 @@ import {
   History,
   TrendingUp,
   Siren,
+  BarChart2,
 } from "lucide-react";
 
 export interface NavItem {
@@ -41,6 +42,7 @@ export function getNavItems(role: string): NavItem[] {
     case "admin":
       return [
         { to: "/admin/dashboard", icon: LayoutDashboard, label: "Dashboard" },
+        { to: "/admin/analytics", icon: BarChart2, label: "Analytics" },
         { to: "/admin/requests", icon: FileText, label: "Requests" },
         { to: "/admin/emergencies", icon: Siren, label: "Emergencies" },
         { to: "/admin/payments", icon: CreditCard, label: "Payments" },

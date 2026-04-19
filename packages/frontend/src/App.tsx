@@ -46,6 +46,7 @@ import { Income } from "@/pages/admin/Income";
 import { EmergencyList } from "@/pages/admin/EmergencyList";
 import { EmergencyCreate } from "@/pages/admin/EmergencyCreate";
 import { EmergencyDetail } from "@/pages/admin/EmergencyDetail";
+import { Analytics } from "@/pages/admin/Analytics";
 
 // Shared pages
 import { Notifications } from "@/pages/Notifications";
@@ -124,6 +125,7 @@ export default function App() {
           <Route element={<ProtectedRoute allowedRoles={["admin"]} />}>
             <Route element={<AppLayout />}>
               <Route path="/admin/dashboard" element={<AdminDashboard />} />
+              <Route path="/admin/analytics" element={<Analytics />} />
               <Route path="/admin/data-entry" element={<DataEntry />} />
               <Route path="/admin/workers/register" element={<WorkerRegistration />} />
               <Route path="/admin/workers" element={<WorkerList />} />

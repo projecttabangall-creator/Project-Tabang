@@ -358,6 +358,69 @@ export async function getIncomeStats(
   }
 }
 
+/**
+ * GET /api/admin/analytics
+ * Aggregated analytics data: requests by status, requests by category, worker performance.
+ */
+export async function getAnalyticsStats(
+  _req: AuthenticatedRequest,
+  res: Response
+): Promise<void> {
+  try {
+    const [requestSnapshot, workerSnapshot] = await Promise.all([
+      db.collection("serviceRequests").get(),
+      db.collection("users").where("role", "==", "worker").get(),
+    ]);
+
+    // Requests by status
+    const statusCounts: Record<string, number> = {};
+    const categoryCounts: Record<string, number> = {};
+
+    for (const doc of requestSnapshot.docs) {
+      const data = doc.data();
+
+      // Group by status
+      const status = data.status || "unknown";
+      statusCounts[status] = (statusCounts[status] || 0) + 1;
+
+      // Group by category
+      const catName = data.categoryName || "Uncategorized";
+      categoryCounts[catName] = (categoryCounts[catName] || 0) + 1;
+    }
+
+    // Top 6 categories by count
+    const requestsByCategory = Object.entries(categoryCounts)
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 6);
+
+    // Worker performance: top 10 by averageRating then completedJobsCount
+    const workerPerformance = workerSnapshot.docs
+      .map((doc) => {
+        const data = doc.data();
+        const wd = data.workerData || {};
+        return {
+          id: doc.id,
+          name: `${data.firstName || ""} ${data.lastName || ""}`.trim(),
+          averageRating: wd.averageRating || 0,
+          completedJobs: wd.completedJobsCount || 0,
+          acceptanceRate: Math.round((wd.acceptanceRate || 0) * 100) / 100,
+        };
+      })
+      .sort((a, b) => b.averageRating - a.averageRating || b.completedJobs - a.completedJobs)
+      .slice(0, 10);
+
+    res.json({
+      requestsByStatus: statusCounts,
+      requestsByCategory,
+      workerPerformance,
+    });
+  } catch (error) {
+    console.error("Analytics stats error:", error);
+    res.status(500).json({ error: "Failed to fetch analytics stats" });
+  }
+}
+
 function getBucketKey(date: Date, period: string): string {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, "0");
