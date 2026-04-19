@@ -14,6 +14,8 @@ import {
   TrendingUp,
   Siren,
   BarChart2,
+  ShieldCheck,
+  UserPlus,
 } from "lucide-react";
 
 export interface NavItem {
@@ -54,6 +56,22 @@ export function getNavItems(role: string): NavItem[] {
         { to: "/admin/data-entry", icon: Settings, label: "Data Entry" },
         { to: "/admin/special-request", icon: Wrench, label: "Special Requests" },
         { to: "/admin/logs", icon: History, label: "Logs" },
+      ];
+    case "superadmin":
+      return [
+        { to: "/superadmin/dashboard",       icon: LayoutDashboard, label: "Dashboard" },
+        { to: "/superadmin/admins",          icon: ShieldCheck,     label: "Admins" },
+        { to: "/superadmin/admins/register", icon: UserPlus,        label: "Register Admin" },
+        { to: "/admin/requests",             icon: FileText,        label: "Requests" },
+        { to: "/admin/emergencies",          icon: Siren,           label: "Emergencies" },
+        { to: "/admin/payments",             icon: CreditCard,      label: "Payments" },
+        { to: "/admin/income",               icon: TrendingUp,      label: "Income" },
+        { to: "/admin/analytics",            icon: BarChart2,       label: "Analytics" },
+        { to: "/admin/disputes",             icon: AlertTriangle,   label: "Disputes" },
+        { to: "/admin/notifications",        icon: Bell,            label: "Notifications" },
+        { to: "/admin/users",                icon: Users,           label: "Users" },
+        { to: "/admin/workers",              icon: Wrench,          label: "Workers" },
+        { to: "/admin/logs",                 icon: History,         label: "Logs" },
       ];
     default:
       return [];

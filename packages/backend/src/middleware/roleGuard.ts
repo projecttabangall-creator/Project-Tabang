@@ -16,7 +16,12 @@ export function roleGuard(...allowedRoles: UserRole[]) {
       return;
     }
 
-    if (!allowedRoles.includes(req.user.role)) {
+    // superadmin inherits all admin permissions automatically
+    const effectiveRoles: UserRole[] = allowedRoles.includes("admin")
+      ? [...allowedRoles, "superadmin"]
+      : allowedRoles;
+
+    if (!effectiveRoles.includes(req.user.role)) {
       res.status(403).json({
         error: "Insufficient permissions",
         required: allowedRoles,

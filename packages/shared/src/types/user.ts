@@ -36,7 +36,7 @@ export interface WorkerData {
   isAvailable: boolean;
 }
 
-export type UserRole = "resident" | "worker" | "admin";
+export type UserRole = "resident" | "worker" | "admin" | "superadmin";
 export type AccountStatus = "active" | "suspended" | "banned";
 
 export interface User {

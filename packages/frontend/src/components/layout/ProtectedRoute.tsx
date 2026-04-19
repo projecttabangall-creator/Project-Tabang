@@ -30,12 +30,13 @@ export function ProtectedRoute({ allowedRoles }: ProtectedRouteProps) {
   // Role check
   if (allowedRoles && !allowedRoles.includes(userProfile.role)) {
     // Redirect to their role's home page
-    const roleHome = {
+    const roleHome: Record<string, string> = {
       resident: "/resident/requests",
       worker: "/worker/home",
       admin: "/admin/dashboard",
+      superadmin: "/superadmin/dashboard",
     };
-    return <Navigate to={roleHome[userProfile.role]} replace />;
+    return <Navigate to={roleHome[userProfile.role] ?? "/"} replace />;
   }
 
   return <Outlet />;

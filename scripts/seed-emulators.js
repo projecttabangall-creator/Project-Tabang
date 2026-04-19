@@ -21,6 +21,21 @@ const db = admin.firestore();
 
 const DEMO_ACCOUNTS = [
   {
+    contactNumber: "09001234567",
+    password: "Pr0jectTab4ng333",
+    firstName: "Super",
+    lastName: "Admin",
+    role: "superadmin",
+    birthday: "1990-01-01",
+    email: "projecttabangall@gmail.com",
+    address: {
+      street: "Tabang HQ",
+      houseLot: "1",
+      blockNo: "1",
+      barangay: "Capitol Site",
+    },
+  },
+  {
     contactNumber: "09171234567",
     password: "Password123",
     firstName: "Juan",
@@ -117,6 +132,7 @@ async function createAccount(account) {
     lastName: account.lastName,
     birthday: account.birthday,
     contactNumber: account.contactNumber,
+    email: account.email || "",
     address: account.address,
     creditPoints: 5,
     isVerified: true,

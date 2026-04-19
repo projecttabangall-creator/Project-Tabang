@@ -48,6 +48,11 @@ import { EmergencyCreate } from "@/pages/admin/EmergencyCreate";
 import { EmergencyDetail } from "@/pages/admin/EmergencyDetail";
 import { Analytics } from "@/pages/admin/Analytics";
 
+// Superadmin pages
+import { SuperadminDashboard } from "@/pages/superadmin/Dashboard";
+import { AdminList } from "@/pages/superadmin/AdminList";
+import { AdminRegistration } from "@/pages/superadmin/AdminRegistration";
+
 // Shared pages
 import { Notifications } from "@/pages/Notifications";
 import { SubmitPayment } from "@/pages/resident/SubmitPayment";
@@ -73,6 +78,8 @@ function RoleRedirect() {
       return <Navigate to="/worker/home" replace />;
     case "admin":
       return <Navigate to="/admin/dashboard" replace />;
+    case "superadmin":
+      return <Navigate to="/superadmin/dashboard" replace />;
     default:
       return <Navigate to="/login" replace />;
   }
@@ -121,8 +128,8 @@ export default function App() {
             </Route>
           </Route>
 
-          {/* Admin routes */}
-          <Route element={<ProtectedRoute allowedRoles={["admin"]} />}>
+          {/* Admin routes — also accessible by superadmin */}
+          <Route element={<ProtectedRoute allowedRoles={["admin", "superadmin"]} />}>
             <Route element={<AppLayout />}>
               <Route path="/admin/dashboard" element={<AdminDashboard />} />
               <Route path="/admin/analytics" element={<Analytics />} />
@@ -143,6 +150,15 @@ export default function App() {
               <Route path="/admin/emergencies" element={<EmergencyList />} />
               <Route path="/admin/emergencies/new" element={<EmergencyCreate />} />
               <Route path="/admin/emergencies/:emergencyId" element={<EmergencyDetail />} />
+            </Route>
+          </Route>
+
+          {/* Superadmin routes */}
+          <Route element={<ProtectedRoute allowedRoles={["superadmin"]} />}>
+            <Route element={<AppLayout />}>
+              <Route path="/superadmin/dashboard" element={<SuperadminDashboard />} />
+              <Route path="/superadmin/admins" element={<AdminList />} />
+              <Route path="/superadmin/admins/register" element={<AdminRegistration />} />
             </Route>
           </Route>
 
