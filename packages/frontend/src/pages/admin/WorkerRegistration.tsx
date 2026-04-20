@@ -319,8 +319,9 @@ export function WorkerRegistration() {
                 placeholder="09171234567"
                 className="input-field"
                 autoComplete="tel"
-                onKeyDown={(e) => { if (e.key.length === 1 && !/[\d+]/.test(e.key)) e.preventDefault(); }}
-                onPaste={(e) => { if (!/^[\d+]*$/.test(e.clipboardData.getData("text"))) e.preventDefault(); }}
+                maxLength={13}
+                onKeyDown={(e) => { if (e.key.length === 1 && (!/[\d+]/.test(e.key) || e.currentTarget.value.length >= 13)) e.preventDefault(); }}
+                onPaste={(e) => { const text = e.clipboardData.getData("text"); if (!/^[\d+]*$/.test(text) || text.length > 13) e.preventDefault(); }}
                 {...register("contactNumber", {
                   required: "Required",
                   pattern: {
@@ -554,6 +555,7 @@ export function WorkerRegistration() {
               type="password"
               placeholder="Minimum 8 characters"
               className="input-field"
+              autoComplete="new-password"
               {...register("password", {
                 required: "Required",
                 minLength: { value: 8, message: "Minimum 8 characters" },
