@@ -22,7 +22,8 @@ export function Checkout() {
     setVerifying(true);
     setError(null);
     try {
-      const res = await fetch("http://localhost:5000/fingerprint/verify", {
+      const fpUrl = import.meta.env.VITE_FINGERPRINT_URL || "http://localhost:5000";
+      const res = await fetch(`${fpUrl}/fingerprint/verify`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ workerId }),

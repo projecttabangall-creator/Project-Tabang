@@ -2,7 +2,6 @@ export interface CategoryItem {
   id: string;
   name: string;
   minPrice: number;
-  isFree: boolean; // calamity/bayanihan flag
   referencePhotoUrl?: string;
   createdAt: Date;
   updatedAt: Date;

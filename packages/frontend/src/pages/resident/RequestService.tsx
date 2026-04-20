@@ -87,7 +87,6 @@ export function RequestService() {
   });
 
   const categoryId = watch("categoryId");
-  const itemId = watch("itemId");
   const latitude = watch("latitude");
   const longitude = watch("longitude");
   const suggestedPrice = Number(watch("suggestedPrice") || 0);
@@ -103,14 +102,6 @@ export function RequestService() {
     }
   }, [latitude, longitude]);
 
-  useEffect(() => {
-    if (selectedCategory && itemId) {
-      const selectedItem = selectedCategory.items.find((item) => item.id === itemId);
-      if (selectedItem && selectedItem.minPrice === 0) {
-        setValue("suggestedPrice", 0);
-      }
-    }
-  }, [itemId, selectedCategory, setValue]);
 
   useEffect(() => {
     api
@@ -255,9 +246,6 @@ export function RequestService() {
       setIsLoading(false);
     }
   };
-
-  const isFreeService =
-    selectedCategory?.items.find((item) => item.id === itemId)?.minPrice === 0;
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -558,19 +546,13 @@ export function RequestService() {
               </p>
             )}
 
-            {isFreeService ? (
-              <p className="text-xs text-emerald-600 mt-2 font-medium">
-                This is a free service.
+            <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600 space-y-1">
+              <p>This will still be negotiated with the worker on-site.</p>
+              <p>Estimated Barangay fee: PHP {commissionEstimate}</p>
+              <p className="font-medium text-slate-700">
+                Estimated total you pay: PHP {totalEstimate}
               </p>
-            ) : (
-              <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600 space-y-1">
-                <p>This will still be negotiated with the worker on-site.</p>
-                <p>Estimated Barangay fee: PHP {commissionEstimate}</p>
-                <p className="font-medium text-slate-700">
-                  Estimated total you pay: PHP {totalEstimate}
-                </p>
-              </div>
-            )}
+            </div>
           </div>
         </div>
 

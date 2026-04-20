@@ -2,6 +2,7 @@
   "name": "project-tabang",
   "version": "1.0.0",
   "private": true,
+  "main": "packages/backend/dist/index.js",
   "description": "Community-driven worker/service booking platform for Barangay",
   "workspaces": [
     "packages/shared",
@@ -20,6 +21,6 @@
     "deploy": "npm run build && firebase deploy"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=20.0.0"
   }
 }

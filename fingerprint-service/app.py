@@ -12,7 +12,7 @@ CORS(app)  # Allow frontend (localhost:3000) to call this service
 
 FINGERPRINT_PORT = os.getenv("FINGERPRINT_PORT", "/dev/ttyS0")
 FINGERPRINT_BAUD = int(os.getenv("FINGERPRINT_BAUD", "57600"))
-API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:5001/project-tabang---claude-code/us-central1/api")
+API_BASE_URL = os.getenv("API_BASE_URL", "https://project-tabang---claude-code.web.app/api")
 
 # Key: worker Firestore document ID, Value: fingerprint position index on sensor
 enrolled_workers = {}

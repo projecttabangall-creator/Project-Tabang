@@ -1,7 +1,7 @@
 {
   "functions": {
-    "source": "packages/backend",
-    "runtime": "nodejs18",
+    "source": ".",
+    "runtime": "nodejs20",
     "predeploy": [
       "npm run build -w packages/shared",
       "npm run build -w packages/backend"

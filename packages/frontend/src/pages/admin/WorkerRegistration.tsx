@@ -223,7 +223,12 @@ export function WorkerRegistration() {
               <label className="label">First Name</label>
               <input
                 className="input-field"
-                {...register("firstName", { required: "Required" })}
+                onKeyDown={(e) => { if (e.key.length === 1 && !/[a-zA-ZÀ-ÿÑñ\s'\-.]/.test(e.key)) e.preventDefault(); }}
+                onPaste={(e) => { if (!/^[a-zA-ZÀ-ÿÑñ\s'\-.]*$/.test(e.clipboardData.getData("text"))) e.preventDefault(); }}
+                {...register("firstName", {
+                  required: "Required",
+                  pattern: { value: /^[a-zA-ZÀ-ÿÑñ\s'\-.]+$/, message: "Letters only" },
+                })}
               />
               {errors.firstName && (
                 <p className="text-red-500 text-xs mt-1">
@@ -235,7 +240,12 @@ export function WorkerRegistration() {
               <label className="label">Last Name</label>
               <input
                 className="input-field"
-                {...register("lastName", { required: "Required" })}
+                onKeyDown={(e) => { if (e.key.length === 1 && !/[a-zA-ZÀ-ÿÑñ\s'\-.]/.test(e.key)) e.preventDefault(); }}
+                onPaste={(e) => { if (!/^[a-zA-ZÀ-ÿÑñ\s'\-.]*$/.test(e.clipboardData.getData("text"))) e.preventDefault(); }}
+                {...register("lastName", {
+                  required: "Required",
+                  pattern: { value: /^[a-zA-ZÀ-ÿÑñ\s'\-.]+$/, message: "Letters only" },
+                })}
               />
               {errors.lastName && (
                 <p className="text-red-500 text-xs mt-1">
@@ -246,10 +256,19 @@ export function WorkerRegistration() {
             <div className="col-span-1">
               <label className="label">M.I.</label>
               <input
-                maxLength={1}
+                maxLength={2}
                 className="input-field"
-                {...register("middleInitial")}
+                onKeyDown={(e) => { if (e.key.length === 1 && !/[a-zA-ZÑñ.]/.test(e.key)) e.preventDefault(); }}
+                onPaste={(e) => { if (!/^[a-zA-ZÑñ.]\.?$/.test(e.clipboardData.getData("text"))) e.preventDefault(); }}
+                {...register("middleInitial", {
+                  pattern: { value: /^[a-zA-ZÑñ]\.?$/, message: "Single letter" },
+                })}
               />
+              {errors.middleInitial && (
+                <p className="text-red-500 text-xs mt-1">
+                  {errors.middleInitial.message}
+                </p>
+              )}
             </div>
           </div>
 
@@ -300,6 +319,8 @@ export function WorkerRegistration() {
                 placeholder="09171234567"
                 className="input-field"
                 autoComplete="tel"
+                onKeyDown={(e) => { if (e.key.length === 1 && !/[\d+]/.test(e.key)) e.preventDefault(); }}
+                onPaste={(e) => { if (!/^[\d+]*$/.test(e.clipboardData.getData("text"))) e.preventDefault(); }}
                 {...register("contactNumber", {
                   required: "Required",
                   pattern: {

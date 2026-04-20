@@ -9,7 +9,7 @@ import logoWithText from "@Assets/logo-with-text.png";
 interface RegisterForm {
   firstName: string;
   lastName: string;
-  birthday: string;
+  middleInitial: string;
   contactNumber: string;
   password: string;
   confirmPassword: string;
@@ -39,10 +39,10 @@ export function Register() {
   async function onSubmit(data: RegisterForm) {
     setIsLoading(true);
     try {
-      const response = await api.post("/api/auth/register", {
+      await api.post("/api/auth/register", {
         firstName: data.firstName,
         lastName: data.lastName,
-        birthday: data.birthday,
+        middleInitial: data.middleInitial,
         contactNumber: data.contactNumber,
         password: data.password,
         address: {
@@ -53,16 +53,8 @@ export function Register() {
         },
       });
 
-      toast.success("Registration successful! Please verify your OTP.");
-
-      // In dev mode, show the OTP
-      if (response.data.devOtp) {
-        toast.info(`Dev OTP: ${response.data.devOtp}`, { duration: 10000 });
-      }
-
-      navigate("/verify-otp", {
-        state: { contactNumber: data.contactNumber },
-      });
+      toast.success("Registration successful! You can now sign in.");
+      navigate("/login");
     } catch (error: any) {
       const message =
         error.response?.data?.error || "Registration failed. Please try again.";
@@ -93,15 +85,41 @@ export function Register() {
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             {/* Name */}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
+            <div>
+              <label htmlFor="lastName" className="label">
+                Last Name
+              </label>
+              <input
+                id="lastName"
+                className="input-field"
+                onKeyDown={(e) => { if (e.key.length === 1 && !/[a-zA-ZÀ-ÿÑñ\s'\-.]/.test(e.key)) e.preventDefault(); }}
+                onPaste={(e) => { if (!/^[a-zA-ZÀ-ÿÑñ\s'\-.]*$/.test(e.clipboardData.getData("text"))) e.preventDefault(); }}
+                {...register("lastName", {
+                  required: "Required",
+                  pattern: { value: /^[a-zA-ZÀ-ÿÑñ\s'\-.]+$/, message: "Letters only" },
+                })}
+              />
+              {errors.lastName && (
+                <p className="text-red-500 text-xs mt-1">
+                  {errors.lastName.message}
+                </p>
+              )}
+            </div>
+
+            <div className="grid grid-cols-3 gap-3">
+              <div className="col-span-2">
                 <label htmlFor="firstName" className="label">
                   First Name
                 </label>
                 <input
                   id="firstName"
                   className="input-field"
-                  {...register("firstName", { required: "Required" })}
+                  onKeyDown={(e) => { if (e.key.length === 1 && !/[a-zA-ZÀ-ÿÑñ\s'\-.]/.test(e.key)) e.preventDefault(); }}
+                  onPaste={(e) => { if (!/^[a-zA-ZÀ-ÿÑñ\s'\-.]*$/.test(e.clipboardData.getData("text"))) e.preventDefault(); }}
+                  {...register("firstName", {
+                    required: "Required",
+                    pattern: { value: /^[a-zA-ZÀ-ÿÑñ\s'\-.]+$/, message: "Letters only" },
+                  })}
                 />
                 {errors.firstName && (
                   <p className="text-red-500 text-xs mt-1">
@@ -110,38 +128,26 @@ export function Register() {
                 )}
               </div>
               <div>
-                <label htmlFor="lastName" className="label">
-                  Last Name
+                <label htmlFor="middleInitial" className="label">
+                  M.I. <span className="text-slate-400 font-normal">(opt.)</span>
                 </label>
                 <input
-                  id="lastName"
+                  id="middleInitial"
                   className="input-field"
-                  {...register("lastName", { required: "Required" })}
+                  placeholder="M."
+                  maxLength={3}
+                  onKeyDown={(e) => { if (e.key.length === 1 && !/[a-zA-ZÑñ.]/.test(e.key)) e.preventDefault(); }}
+                  onPaste={(e) => { if (!/^[a-zA-ZÑñ.]\.?$/.test(e.clipboardData.getData("text"))) e.preventDefault(); }}
+                  {...register("middleInitial", {
+                    pattern: { value: /^[a-zA-ZÑñ]\.?$/, message: "Single letter" },
+                  })}
                 />
-                {errors.lastName && (
+                {errors.middleInitial && (
                   <p className="text-red-500 text-xs mt-1">
-                    {errors.lastName.message}
+                    {errors.middleInitial.message}
                   </p>
                 )}
               </div>
-            </div>
-
-            {/* Birthday */}
-            <div>
-              <label htmlFor="birthday" className="label">
-                Birthday
-              </label>
-              <input
-                id="birthday"
-                type="date"
-                className="input-field"
-                {...register("birthday", { required: "Required" })}
-              />
-              {errors.birthday && (
-                <p className="text-red-500 text-xs mt-1">
-                  {errors.birthday.message}
-                </p>
-              )}
             </div>
 
             {/* Contact */}
@@ -155,6 +161,8 @@ export function Register() {
                 placeholder="09171234567"
                 className="input-field"
                 autoComplete="tel"
+                onKeyDown={(e) => { if (e.key.length === 1 && !/[\d+]/.test(e.key)) e.preventDefault(); }}
+                onPaste={(e) => { if (!/^[\d+]*$/.test(e.clipboardData.getData("text"))) e.preventDefault(); }}
                 {...register("contactNumber", {
                   required: "Required",
                   pattern: {

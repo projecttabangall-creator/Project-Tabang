@@ -10,7 +10,6 @@ interface Item {
   id: string;
   name: string;
   minPrice: number;
-  isFree: boolean;
   referencePhotoUrl?: string;
 }
 
@@ -36,7 +35,7 @@ export function DataEntry() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const categoryForm = useForm<{ name: string }>();
-  const itemForm = useForm<{ name: string; minPrice: number; isFree: boolean }>();
+  const itemForm = useForm<{ name: string; minPrice: number }>();
 
   useEffect(() => {
     setLoading(true);
@@ -75,13 +74,12 @@ export function DataEntry() {
 
   async function handleCreateItem(
     categoryId: string,
-    formData: { name: string; minPrice: number; isFree: boolean }
+    formData: { name: string; minPrice: number }
   ) {
     try {
       const createRes = await api.post(`/api/categories/${categoryId}/items`, {
         name: formData.name,
         minPrice: Number(formData.minPrice),
-        isFree: formData.isFree || false,
       });
 
       const itemId = createRes.data.id;
@@ -110,7 +108,7 @@ export function DataEntry() {
   async function handleUpdateItem(
     categoryId: string,
     itemId: string,
-    formData: { name: string; minPrice: number; isFree: boolean }
+    formData: { name: string; minPrice: number }
   ) {
     try {
       setUploadingItemId(itemId);
@@ -118,7 +116,6 @@ export function DataEntry() {
       const updatePayload: any = {
         name: formData.name,
         minPrice: Number(formData.minPrice),
-        isFree: formData.isFree,
       };
 
       // If a new file is selected, upload it first
@@ -276,7 +273,6 @@ export function DataEntry() {
                         <tr className="text-left text-slate-500 border-b">
                           <th className="pb-2 font-medium">Item</th>
                           <th className="pb-2 font-medium">Min Price</th>
-                          <th className="pb-2 font-medium">Free</th>
                           <th className="pb-2 font-medium w-20">Actions</th>
                         </tr>
                       </thead>
@@ -337,19 +333,6 @@ export function DataEntry() {
                                   })}
                                 />
                               </td>
-                              <td className="py-2">
-                                <input
-                                  type="checkbox"
-                                  defaultChecked={item.isFree}
-                                  {...itemForm.register("isFree", {
-                                    onChange: (e) => {
-                                      if (e.target.checked) {
-                                        itemForm.setValue("minPrice", 0);
-                                      }
-                                    },
-                                  })}
-                                />
-                              </td>
                               <td className="py-2 flex gap-1">
                                 <button
                                   onClick={itemForm.handleSubmit((data) =>
@@ -395,18 +378,7 @@ export function DataEntry() {
                                 </div>
                               </td>
                               <td className="py-2">
-                                {item.isFree
-                                  ? "Free"
-                                  : `₱${item.minPrice.toLocaleString()}`}
-                              </td>
-                              <td className="py-2">
-                                {item.isFree ? (
-                                  <span className="text-emerald-600 text-xs">
-                                    Yes
-                                  </span>
-                                ) : (
-                                  "—"
-                                )}
+                                ₱{item.minPrice.toLocaleString()}
                               </td>
                               <td className="py-2">
                                 <div className="flex gap-2">
@@ -421,7 +393,6 @@ export function DataEntry() {
                                         "minPrice",
                                         item.minPrice
                                       );
-                                      itemForm.setValue("isFree", item.isFree);
                                     }}
                                     className="text-slate-400 hover:text-primary-600"
                                   >
@@ -470,19 +441,6 @@ export function DataEntry() {
                             {...itemForm.register("minPrice", { required: true })}
                           />
                         </div>
-                        <label className="flex items-center gap-1 text-sm">
-                          <input
-                            type="checkbox"
-                            {...itemForm.register("isFree", {
-                              onChange: (e) => {
-                                if (e.target.checked) {
-                                  itemForm.setValue("minPrice", 0);
-                                }
-                              },
-                            })}
-                          />
-                          Free
-                        </label>
                       </div>
                       <div className="flex gap-2 items-end">
                         <label className="flex items-center gap-2 px-3 py-2 border border-slate-300 rounded text-sm cursor-pointer hover:bg-slate-50">

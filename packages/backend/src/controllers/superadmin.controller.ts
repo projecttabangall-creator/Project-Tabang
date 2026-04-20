@@ -17,15 +17,14 @@ export async function registerAdmin(
     firstName,
     lastName,
     middleInitial,
-    birthday,
     contactNumber,
     password,
-    address,
+    assignedBarangay,
     email,
   } = req.body;
 
-  if (!firstName || !lastName || !contactNumber || !password || !birthday) {
-    res.status(400).json({ error: "firstName, lastName, contactNumber, password, and birthday are required" });
+  if (!firstName || !lastName || !contactNumber || !password) {
+    res.status(400).json({ error: "firstName, lastName, contactNumber, and password are required" });
     return;
   }
 
@@ -74,10 +73,9 @@ export async function registerAdmin(
       firstName,
       lastName,
       middleInitial: middleInitial || "",
-      birthday,
       contactNumber: normalized,
       email: email || "",
-      address: address || {},
+      assignedBarangay: assignedBarangay || "",
       creditPoints: 5,
       isVerified: true,
       isActive: true,

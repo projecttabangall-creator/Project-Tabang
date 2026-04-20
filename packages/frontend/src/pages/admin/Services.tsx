@@ -8,7 +8,6 @@ import {
   List,
   Pencil,
   Tag,
-  Gift,
 } from "lucide-react";
 import { format } from "date-fns";
 import api from "@/services/api";
@@ -17,7 +16,6 @@ interface CategoryItem {
   id: string;
   name: string;
   minPrice: number;
-  isFree: boolean;
   referencePhotoUrl?: string;
   createdAt: { _seconds: number } | string;
   updatedAt: { _seconds: number } | string;
@@ -170,23 +168,12 @@ export function Services() {
                                   {item.name}
                                 </td>
                                 <td className="px-5 py-3">
-                                  {item.isFree ? (
-                                    <span className="inline-flex items-center gap-1 text-emerald-600 font-semibold">
-                                      <Gift size={14} />
-                                      Free
-                                    </span>
-                                  ) : (
-                                    <span className="text-slate-700 font-medium">
-                                      ₱{item.minPrice.toLocaleString()}
-                                    </span>
-                                  )}
+                                  <span className="text-slate-700 font-medium">
+                                    ₱{item.minPrice.toLocaleString()}
+                                  </span>
                                 </td>
                                 <td className="px-5 py-3">
-                                  {item.isFree ? (
-                                    <span className="badge-accent">Bayanihan</span>
-                                  ) : (
-                                    <span className="badge-success">Standard</span>
-                                  )}
+                                  <span className="badge-success">Standard</span>
                                 </td>
                                 <td className="px-5 py-3 text-slate-400 hidden sm:table-cell">
                                   {format(parseTimestamp(item.createdAt), "MMM d, yyyy")}

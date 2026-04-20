@@ -14,7 +14,7 @@ const workerCredentialSchema = z.object({
 export const registerResidentSchema = z.object({
   firstName: z.string().min(1, "First name is required"),
   lastName: z.string().min(1, "Last name is required"),
-  birthday: z.string().min(1, "Birthday is required"),
+  middleInitial: z.string().max(3).optional(),
   contactNumber: z
     .string()
     .min(10, "Contact number must be at least 10 digits")

@@ -1,4 +1,4 @@
-import * as functions from "firebase-functions";
+import { onRequest } from "firebase-functions/v2/https";
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
@@ -41,8 +41,8 @@ app.use("/api/admin", adminRouter);
 app.use("/api/emergencies", emergencyRouter);
 app.use("/api/superadmin", superadminRouter);
 
-// Export as Firebase Cloud Function
-export const api = functions.https.onRequest(app);
+// Export as Firebase Cloud Function (v2, public invoker for Hosting rewrites)
+export const api = onRequest({ invoker: "public" }, app);
 
 // Export Firestore triggers
 export { onRequestCreated, onRequestUpdated };

@@ -45,7 +45,7 @@ export interface User {
   firstName: string;
   lastName: string;
   middleInitial?: string;
-  birthday: Date;
+  birthday?: Date;
   contactNumber: string;
   email?: string;
   address: Address;

@@ -204,7 +204,8 @@ export function WorkerDetail() {
     setEnrollError(null);
     try {
       const token = await firebaseAuth.currentUser?.getIdToken();
-      const res = await fetch("http://localhost:5000/fingerprint/enroll", {
+      const fpUrl = import.meta.env.VITE_FINGERPRINT_URL || "http://localhost:5000";
+      const res = await fetch(`${fpUrl}/fingerprint/enroll`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ workerId, adminToken: token }),

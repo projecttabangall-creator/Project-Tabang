@@ -50,47 +50,29 @@ export async function registerResident(
     // Set custom claims for role
     await auth.setCustomUserClaims(userRecord.uid, { role: ROLES.RESIDENT });
 
-    // Create user document in Firestore
+    // Create user document in Firestore (auto-verified — OTP skipped)
     const now = FieldValue.serverTimestamp();
     await db.collection("users").doc(userRecord.uid).set({
       uid: userRecord.uid,
       role: ROLES.RESIDENT,
       firstName: body.firstName,
       lastName: body.lastName,
-      birthday: body.birthday,
+      middleInitial: body.middleInitial || "",
       contactNumber: body.contactNumber,
       address: body.address,
       creditPoints: DEFAULT_CREDIT_POINTS,
-      isVerified: false,
+      isVerified: true,
       isActive: true,
       accountStatus: "active",
-      otpVerified: false,
+      otpVerified: true,
       failedLoginAttempts: 0,
       createdAt: now,
       updatedAt: now,
     });
 
-    // Generate OTP (6 digits)
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const otpExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
-
-    // Store hashed OTP — never store plaintext OTPs
-    await db.collection("otps").doc(userRecord.uid).set({
-      otpHash: hashOtp(otp),
-      expiresAt: otpExpiry,
-      contactNumber: body.contactNumber,
-      createdAt: new Date(),
-    });
-
-    // In development: log OTP to console (Firebase Auth emulator)
-    // In production: send via SMS (Semaphore)
-    console.log(`[DEV] OTP for ${body.contactNumber}: ${otp}`);
-
     res.status(201).json({
-      message: "Registration successful. Please verify your OTP.",
+      message: "Registration successful.",
       uid: userRecord.uid,
-      // Only include OTP in development for testing
-      ...(process.env.FUNCTIONS_EMULATOR === "true" && { devOtp: otp }),
     });
   } catch (error: any) {
     console.error("Registration error:", error);

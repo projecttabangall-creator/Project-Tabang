@@ -14,34 +14,40 @@ export function AdminRegistration() {
     firstName: "",
     lastName: "",
     middleInitial: "",
-    birthday: "",
     contactNumber: "",
     email: "",
     password: "",
-    address: {
-      street: "",
-      houseLot: "",
-      blockNo: "",
-      barangay: "",
-    },
+    assignedBarangay: "",
   });
 
   function set(field: string, value: string) {
     setForm((prev) => ({ ...prev, [field]: value }));
   }
 
-  function setAddress(field: string, value: string) {
-    setForm((prev) => ({
-      ...prev,
-      address: { ...prev.address, [field]: value },
-    }));
-  }
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
-    if (!form.firstName || !form.lastName || !form.contactNumber || !form.password || !form.birthday) {
+    if (!form.firstName || !form.lastName || !form.contactNumber || !form.password) {
       toast.error("Please fill in all required fields");
+      return;
+    }
+
+    const namePattern = /^[a-zA-ZÀ-ÿÑñ\s'\-.]+$/;
+    if (!namePattern.test(form.firstName)) {
+      toast.error("First name should contain letters only");
+      return;
+    }
+    if (!namePattern.test(form.lastName)) {
+      toast.error("Last name should contain letters only");
+      return;
+    }
+    if (form.middleInitial && !/^[a-zA-ZÑñ]\.?$/.test(form.middleInitial)) {
+      toast.error("Middle initial should be a single letter");
+      return;
+    }
+
+    if (!/^(\+63|0)\d{10}$/.test(form.contactNumber)) {
+      toast.error("Enter a valid PH number (e.g. 09171234567)");
       return;
     }
 
@@ -84,7 +90,7 @@ export function AdminRegistration() {
               <input
                 className="input-field"
                 value={form.firstName}
-                onChange={(e) => set("firstName", e.target.value)}
+                onChange={(e) => set("firstName", e.target.value.replace(/[^a-zA-ZÀ-ÿÑñ\s'\-.]/g, ""))}
                 placeholder="Juan"
                 required
               />
@@ -94,7 +100,7 @@ export function AdminRegistration() {
               <input
                 className="input-field"
                 value={form.lastName}
-                onChange={(e) => set("lastName", e.target.value)}
+                onChange={(e) => set("lastName", e.target.value.replace(/[^a-zA-ZÀ-ÿÑñ\s'\-.]/g, ""))}
                 placeholder="Dela Cruz"
                 required
               />
@@ -107,20 +113,21 @@ export function AdminRegistration() {
               <input
                 className="input-field"
                 value={form.middleInitial}
-                onChange={(e) => set("middleInitial", e.target.value)}
+                onChange={(e) => set("middleInitial", e.target.value.replace(/[^a-zA-ZÑñ.]/g, ""))}
                 placeholder="M."
                 maxLength={3}
               />
             </div>
             <div>
-              <label className="label">Birthday <span className="text-rose-500">*</span></label>
-              <input
-                type="date"
+              <label className="label">Assigned Barangay</label>
+              <select
                 className="input-field"
-                value={form.birthday}
-                onChange={(e) => set("birthday", e.target.value)}
-                required
-              />
+                value={form.assignedBarangay}
+                onChange={(e) => set("assignedBarangay", e.target.value)}
+              >
+                <option value="">Select barangay</option>
+                <option value="Banilad">Banilad</option>
+              </select>
             </div>
           </div>
         </div>
@@ -134,7 +141,7 @@ export function AdminRegistration() {
             <input
               className="input-field"
               value={form.contactNumber}
-              onChange={(e) => set("contactNumber", e.target.value)}
+              onChange={(e) => set("contactNumber", e.target.value.replace(/[^\d+]/g, ""))}
               placeholder="09XXXXXXXXX"
               required
             />
@@ -170,50 +177,6 @@ export function AdminRegistration() {
               >
                 {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Address */}
-        <div className="card space-y-4">
-          <h2 className="section-title">Address</h2>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="label">Street</label>
-              <input
-                className="input-field"
-                value={form.address.street}
-                onChange={(e) => setAddress("street", e.target.value)}
-                placeholder="Osmena Blvd"
-              />
-            </div>
-            <div>
-              <label className="label">House / Lot No.</label>
-              <input
-                className="input-field"
-                value={form.address.houseLot}
-                onChange={(e) => setAddress("houseLot", e.target.value)}
-                placeholder="12"
-              />
-            </div>
-            <div>
-              <label className="label">Block No.</label>
-              <input
-                className="input-field"
-                value={form.address.blockNo}
-                onChange={(e) => setAddress("blockNo", e.target.value)}
-                placeholder="3"
-              />
-            </div>
-            <div>
-              <label className="label">Barangay</label>
-              <input
-                className="input-field"
-                value={form.address.barangay}
-                onChange={(e) => setAddress("barangay", e.target.value)}
-                placeholder="Capitol Site"
-              />
             </div>
           </div>
         </div>

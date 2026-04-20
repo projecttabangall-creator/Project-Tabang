@@ -128,7 +128,7 @@ export async function createItem(
   res: Response
 ): Promise<void> {
   const categoryId = req.params.id as string;
-  const { name, minPrice, isFree } = req.body as CreateItemInput;
+  const { name, minPrice } = req.body as CreateItemInput;
 
   try {
     const categoryDoc = await categoriesRef.doc(categoryId).get();
@@ -143,8 +143,7 @@ export async function createItem(
       .collection("items")
       .add({
         name,
-        minPrice: isFree ? 0 : minPrice,
-        isFree: isFree || false,
+        minPrice,
         createdAt: now,
         updatedAt: now,
       });
@@ -156,7 +155,7 @@ export async function createItem(
       createdAt: now,
     });
 
-    res.status(201).json({ id: itemRef.id, name, minPrice, isFree });
+    res.status(201).json({ id: itemRef.id, name, minPrice });
   } catch (error) {
     console.error("Create item error:", error);
     res.status(500).json({ error: "Failed to create item" });
@@ -165,7 +164,7 @@ export async function createItem(
 
 /**
  * PATCH /api/categories/:id/items/:itemId
- * Update a service item (name, minPrice, isFree, referencePhotoUrl).
+ * Update a service item (name, minPrice, referencePhotoUrl).
  */
 export async function updateItem(
   req: AuthenticatedRequest,
@@ -192,7 +191,6 @@ export async function updateItem(
     };
     if (body.name !== undefined) updates.name = body.name;
     if (body.minPrice !== undefined) updates.minPrice = body.minPrice;
-    if (body.isFree !== undefined) updates.isFree = body.isFree;
     if (body.referencePhotoUrl !== undefined)
       updates.referencePhotoUrl = body.referencePhotoUrl;
 

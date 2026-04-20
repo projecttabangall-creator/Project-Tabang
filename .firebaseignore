@@ -1,0 +1,38 @@
+# Exclude frontend from functions upload
+packages/frontend/
+
+# Node modules (reinstalled by Cloud Build)
+node_modules/
+packages/shared/node_modules/
+packages/backend/node_modules/
+
+# Frontend build output
+packages/frontend/dist/
+
+# Dev / editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+firebase-debug.log
+
+# Firebase emulator data
+.firebase/
+emulator-data/
+
+# TypeScript build info
+*.tsbuildinfo
+
+# Scripts (not needed in Cloud Build)
+scripts/
+
+# Environment files
+.env
+.env.local
+.env.*.local

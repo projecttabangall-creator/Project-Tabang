@@ -17,7 +17,7 @@ import api from "@/services/api";
 interface Category {
   id: string;
   name: string;
-  items: Array<{ id: string; name: string; minPrice: number; isFree: boolean }>;
+  items: Array<{ id: string; name: string; minPrice: number }>;
 }
 
 interface SpecialRequestFormData {
@@ -263,8 +263,11 @@ export function SpecialRequest() {
               <input
                 className="input-field"
                 placeholder="First name"
+                onKeyDown={(e) => { if (e.key.length === 1 && !/[a-zA-ZÀ-ÿÑñ\s'\-.]/.test(e.key)) e.preventDefault(); }}
+                onPaste={(e) => { if (!/^[a-zA-ZÀ-ÿÑñ\s'\-.]*$/.test(e.clipboardData.getData("text"))) e.preventDefault(); }}
                 {...register("beneficiaryFirstName", {
                   required: "First name is required",
+                  pattern: { value: /^[a-zA-ZÀ-ÿÑñ\s'\-.]+$/, message: "Letters only" },
                 })}
               />
               {errors.beneficiaryFirstName && (
@@ -278,8 +281,11 @@ export function SpecialRequest() {
               <input
                 className="input-field"
                 placeholder="Last name"
+                onKeyDown={(e) => { if (e.key.length === 1 && !/[a-zA-ZÀ-ÿÑñ\s'\-.]/.test(e.key)) e.preventDefault(); }}
+                onPaste={(e) => { if (!/^[a-zA-ZÀ-ÿÑñ\s'\-.]*$/.test(e.clipboardData.getData("text"))) e.preventDefault(); }}
                 {...register("beneficiaryLastName", {
                   required: "Last name is required",
+                  pattern: { value: /^[a-zA-ZÀ-ÿÑñ\s'\-.]+$/, message: "Letters only" },
                 })}
               />
               {errors.beneficiaryLastName && (
@@ -295,8 +301,11 @@ export function SpecialRequest() {
             <input
               className="input-field"
               placeholder="09XX-XXX-XXXX"
+              onKeyDown={(e) => { if (e.key.length === 1 && !/[\d+]/.test(e.key)) e.preventDefault(); }}
+              onPaste={(e) => { if (!/^[\d+]*$/.test(e.clipboardData.getData("text"))) e.preventDefault(); }}
               {...register("beneficiaryContact", {
                 required: "Contact number is required",
+                pattern: { value: /^(\+63|0)\d{10}$/, message: "Enter a valid PH number (e.g. 09171234567)" },
               })}
             />
             {errors.beneficiaryContact && (
@@ -357,8 +366,7 @@ export function SpecialRequest() {
                 <option value="">Select an item...</option>
                 {selectedCategory.items.map((item) => (
                   <option key={item.id} value={item.id}>
-                    {item.name}
-                    {item.isFree ? " (Free)" : ` (Min: ₱${item.minPrice})`}
+                    {item.name} (Min: ₱{item.minPrice})
                   </option>
                 ))}
               </select>
@@ -495,6 +503,11 @@ export function SpecialRequest() {
                   required: "Start time is required",
                 })}
               />
+              {errors.startTime && (
+                <p className="text-rose-500 text-xs mt-1">
+                  {errors.startTime.message}
+                </p>
+              )}
             </div>
             <div>
               <label className="label flex items-center gap-1">
@@ -505,6 +518,11 @@ export function SpecialRequest() {
                 className="input-field"
                 {...register("endTime", { required: "End time is required" })}
               />
+              {errors.endTime && (
+                <p className="text-rose-500 text-xs mt-1">
+                  {errors.endTime.message}
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -524,8 +542,14 @@ export function SpecialRequest() {
               {...register("suggestedPrice", {
                 required: "Price is required",
                 valueAsNumber: true,
+                min: { value: 0, message: "Price cannot be negative" },
               })}
             />
+            {errors.suggestedPrice && (
+              <p className="text-rose-500 text-xs mt-1">
+                {errors.suggestedPrice.message}
+              </p>
+            )}
           </div>
         </div>
 
