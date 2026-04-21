@@ -6,6 +6,8 @@ import { BackButton } from "@/components/common/BackButton";
 import { Calendar, Camera, Clock, LocateFixed, MapPin, Upload, X } from "lucide-react";
 import { MapContainer, Marker, TileLayer, useMap, useMapEvents } from "react-leaflet";
 import api from "@/services/api";
+import { useAuth } from "@/contexts/AuthContext";
+import { uploadFile } from "@/utils/uploadFile";
 
 const DEFAULT_COMMISSION_PERCENT = 10;
 
@@ -54,6 +56,7 @@ function FlyToLocation({ position }: { position: [number, number] | null }) {
 
 export function RequestService() {
   const navigate = useNavigate();
+  const { userProfile } = useAuth();
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -66,6 +69,7 @@ export function RequestService() {
   const [markerPosition, setMarkerPosition] = useState<[number, number] | null>(
     null
   );
+  const [photoFiles, setPhotoFiles] = useState<File[]>([]);
   const [photoDataUrls, setPhotoDataUrls] = useState<string[]>([]);
   const [isLocating, setIsLocating] = useState(false);
 
@@ -187,7 +191,7 @@ export function RequestService() {
       return;
     }
 
-    if (photoDataUrls.length >= 3) {
+    if (photoFiles.length >= 3) {
       toast.error("Maximum 3 photos allowed");
       return;
     }
@@ -195,7 +199,8 @@ export function RequestService() {
     const reader = new FileReader();
     reader.onload = (e) => {
       const dataUrl = e.target?.result as string;
-      setPhotoDataUrls([...photoDataUrls, dataUrl]);
+      setPhotoFiles((prev) => [...prev, file]);
+      setPhotoDataUrls((prev) => [...prev, dataUrl]);
       toast.success("Photo added");
     };
     reader.onerror = () => {
@@ -213,12 +218,25 @@ export function RequestService() {
   };
 
   const handleRemovePhoto = (index: number) => {
-    setPhotoDataUrls(photoDataUrls.filter((_, i) => i !== index));
+    setPhotoFiles((prev) => prev.filter((_, i) => i !== index));
+    setPhotoDataUrls((prev) => prev.filter((_, i) => i !== index));
   };
 
   const onSubmit = async (data: RequestFormData) => {
     setIsLoading(true);
     try {
+      // Upload photos to Firebase Storage first; store download URLs (not base64)
+      const uid = userProfile?.uid || "unknown";
+      const uploadTimestamp = Date.now();
+      const uploadedUrls = await Promise.all(
+        photoFiles.map((file, i) =>
+          uploadFile(
+            `users/${uid}/request-photos/${uploadTimestamp}_${i}.jpg`,
+            file
+          )
+        )
+      );
+
       await api.post("/api/requests", {
         categoryId: data.categoryId,
         itemId: data.itemId,
@@ -229,7 +247,7 @@ export function RequestService() {
           longitude: data.longitude,
         },
         locationAddress: data.locationAddress,
-        photoUrls: photoDataUrls,
+        photoUrls: uploadedUrls,
         schedule: {
           date: data.date,
           startTime: data.startTime,
