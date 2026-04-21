@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { Shield, Star, Phone, Mail, Lock, Camera } from "lucide-react";
+import { Shield, Star, Phone, Mail, Lock, Camera, Edit2 } from "lucide-react";
 import { toast } from "sonner";
 import { uploadFile } from "@/utils/uploadFile";
 import api from "@/services/api";
@@ -9,6 +9,10 @@ import { BackButton } from "@/components/common/BackButton";
 export function ResidentProfile() {
   const { userProfile, refreshProfile } = useAuth();
   const [uploading, setUploading] = useState(false);
+  const [editingEmail, setEditingEmail] = useState(false);
+  const [emailValue, setEmailValue] = useState("");
+  const [emailError, setEmailError] = useState("");
+  const [savingEmail, setSavingEmail] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (!userProfile) return null;
@@ -30,6 +34,42 @@ export function ResidentProfile() {
       toast.error("Failed to upload photo");
     } finally {
       setUploading(false);
+    }
+  }
+
+  function startEditingEmail() {
+    setEmailValue(userProfile?.email || "");
+    setEmailError("");
+    setEditingEmail(true);
+  }
+
+  function cancelEditingEmail() {
+    setEditingEmail(false);
+    setEmailError("");
+  }
+
+  async function saveEmail() {
+    const trimmed = emailValue.trim();
+    if (!trimmed) {
+      setEmailError("Email cannot be empty");
+      return;
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(trimmed)) {
+      setEmailError("Invalid email format");
+      return;
+    }
+
+    setSavingEmail(true);
+    try {
+      await api.patch("/api/auth/profile", { email: trimmed });
+      await refreshProfile();
+      setEditingEmail(false);
+      toast.success("Email updated");
+    } catch {
+      toast.error("Failed to update email");
+    } finally {
+      setSavingEmail(false);
     }
   }
 
@@ -93,11 +133,54 @@ export function ResidentProfile() {
             <Phone size={16} className="text-slate-400" />
             <span>{userProfile.contactNumber}</span>
           </div>
-          <div className="flex items-center gap-3 text-sm">
-            <Mail size={16} className="text-slate-400" />
-            <span className="text-slate-500">
-              {userProfile.email || "No email set"}
-            </span>
+          <div className="space-y-2">
+            {editingEmail ? (
+              <div className="flex items-end gap-2">
+                <div className="flex-1">
+                  <input
+                    type="email"
+                    value={emailValue}
+                    onChange={(e) => {
+                      setEmailValue(e.target.value);
+                      setEmailError("");
+                    }}
+                    className="input-field text-sm"
+                    placeholder="your@email.com"
+                  />
+                  {emailError && (
+                    <p className="text-red-500 text-xs mt-1">{emailError}</p>
+                  )}
+                </div>
+                <button
+                  onClick={saveEmail}
+                  disabled={savingEmail}
+                  className="px-2 py-1 bg-primary-600 text-white rounded text-xs font-medium hover:bg-primary-700 disabled:opacity-50"
+                >
+                  Save
+                </button>
+                <button
+                  onClick={cancelEditingEmail}
+                  disabled={savingEmail}
+                  className="px-2 py-1 bg-slate-200 text-slate-700 rounded text-xs font-medium hover:bg-slate-300 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-3 text-sm">
+                <Mail size={16} className="text-slate-400" />
+                <span className="text-slate-500 flex-1">
+                  {userProfile.email || "No email set"}
+                </span>
+                <button
+                  onClick={startEditingEmail}
+                  className="text-slate-400 hover:text-primary-600 transition-colors"
+                  title="Edit email"
+                >
+                  <Edit2 size={14} />
+                </button>
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-3 text-sm">
             <Star size={16} className="text-slate-400" />
