@@ -43,16 +43,21 @@ export function WorkerProfile() {
 
   const workerData = userProfile?.workerData;
 
-  // Fetch category name for the worker's specialization
+  // Fetch category names for the worker's specializations
   useEffect(() => {
     if (!workerData?.specialization) return;
+    const specs = Array.isArray(workerData.specialization)
+      ? workerData.specialization
+      : [workerData.specialization];
+    if (!specs.length) return;
     api
       .get("/api/categories")
       .then(({ data }) => {
-        const cat = data.categories?.find(
-          (c: any) => c.id === workerData.specialization
-        );
-        if (cat) setCategoryName(cat.name);
+        const names = specs
+          .map((id: string) => data.categories?.find((c: any) => c.id === id)?.name)
+          .filter(Boolean)
+          .join(", ");
+        if (names) setCategoryName(names);
       })
       .catch(() => {});
   }, [workerData?.specialization]);

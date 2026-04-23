@@ -78,7 +78,7 @@ interface WorkerProfile {
   createdAt?: unknown;
   termsAcceptedAt?: string | null;
   workerData?: {
-    specialization?: string;
+    specialization?: string | string[];
     credentials?: WorkerCredential[];
     biometricEnrolled?: boolean;
     averageRating?: number;
@@ -167,11 +167,12 @@ export function WorkerDetail() {
   }, [worker?.workerData?.credentials]);
 
   const specializationLabel = useMemo(() => {
-    const specialization = worker?.workerData?.specialization;
-    if (!specialization) return "Not available";
-
-    const category = categories.find((item) => item.id === specialization);
-    return category?.name || specialization;
+    const raw = worker?.workerData?.specialization;
+    const specs = Array.isArray(raw) ? raw : raw ? [raw] : [];
+    if (!specs.length) return "Not available";
+    return specs
+      .map((id) => categories.find((c) => c.id === id)?.name || id)
+      .join(", ");
   }, [categories, worker?.workerData?.specialization]);
 
   async function handleVerify() {

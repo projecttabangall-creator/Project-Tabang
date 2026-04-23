@@ -141,7 +141,11 @@ export function AdminRegistration() {
             <input
               className="input-field"
               value={form.contactNumber}
-              onChange={(e) => set("contactNumber", e.target.value.replace(/[^\d+]/g, ""))}
+              onChange={(e) => {
+                const raw = e.target.value.replace(/[^\d+]/g, "");
+                const maxLen = raw.startsWith('+') ? 13 : 11;
+                set("contactNumber", raw.slice(0, maxLen));
+              }}
               placeholder="09XXXXXXXXX"
               required
             />

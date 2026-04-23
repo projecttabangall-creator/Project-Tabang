@@ -47,6 +47,7 @@ import { EmergencyList } from "@/pages/admin/EmergencyList";
 import { EmergencyCreate } from "@/pages/admin/EmergencyCreate";
 import { EmergencyDetail } from "@/pages/admin/EmergencyDetail";
 import { Analytics } from "@/pages/admin/Analytics";
+import { AdminProfile } from "@/pages/admin/Profile";
 
 // Superadmin pages
 import { SuperadminDashboard } from "@/pages/superadmin/Dashboard";
@@ -147,6 +148,7 @@ export default function App() {
               <Route path="/admin/services" element={<Services />} />
               <Route path="/admin/logs" element={<SystemLogs />} />
               <Route path="/admin/notifications" element={<Notifications />} />
+              <Route path="/admin/profile" element={<AdminProfile />} />
               <Route path="/admin/emergencies" element={<EmergencyList />} />
               <Route path="/admin/emergencies/new" element={<EmergencyCreate />} />
               <Route path="/admin/emergencies/:emergencyId" element={<EmergencyDetail />} />

@@ -221,7 +221,7 @@ export function WorkerHome() {
                 <div className="flex items-center gap-4 text-xs text-slate-500 mb-3">
                   <span className="flex items-center gap-1">
                     <Clock size={14} />
-                    {request.schedule.startTime} - {request.schedule.endTime}
+                    {request.schedule.startTime ? `${request.schedule.startTime} - ${request.schedule.endTime}` : "No specified time"}
                   </span>
                 </div>
 
@@ -264,7 +264,7 @@ export function WorkerHome() {
                 <div className="flex items-center gap-4 text-xs text-slate-500 mb-3">
                   <span className="flex items-center gap-1">
                     <Clock size={14} />
-                    {request.schedule.startTime} - {request.schedule.endTime}
+                    {request.schedule.startTime ? `${request.schedule.startTime} - ${request.schedule.endTime}` : "No specified time"}
                   </span>
                 </div>
 

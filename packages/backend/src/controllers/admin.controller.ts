@@ -1,9 +1,28 @@
 import { Response } from "express";
 import { AuthenticatedRequest } from "../middleware/auth";
 import { db } from "../config/firebase";
-import { FieldValue } from "firebase-admin/firestore";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 
 const usersRef = db.collection("users");
+
+function toDate(value: unknown): Date | null {
+  if (!value) return null;
+  if (value instanceof Date) return value;
+  if (value instanceof Timestamp) return value.toDate();
+
+  if (typeof value === "object" && value !== null) {
+    const maybeTimestamp = value as { toDate?: () => Date; _seconds?: number };
+    if (typeof maybeTimestamp.toDate === "function") {
+      return maybeTimestamp.toDate();
+    }
+    if (typeof maybeTimestamp._seconds === "number") {
+      return new Date(maybeTimestamp._seconds * 1000);
+    }
+  }
+
+  const parsed = new Date(value as string | number);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
 
 /**
  * GET /api/admin/dashboard
@@ -95,6 +114,8 @@ export async function listUsers(
         isVerified: data.isVerified,
         isActive: data.isActive,
         accountStatus: data.accountStatus,
+        suspendReason: data.suspendReason,
+        suspendUntil: data.suspendUntil ? toDate(data.suspendUntil) : null,
         createdAt: data.createdAt,
       };
     });
@@ -109,17 +130,42 @@ export async function listUsers(
 /**
  * PATCH /api/admin/users/:id/status
  * Update user account status (active, suspended, banned).
+ * For suspend: requires reason, durationValue (number), durationUnit ("hours"|"days")
+ * For ban: requires reason
+ * For active: optional reason (for reactivation notes)
  */
 export async function updateUserStatus(
   req: AuthenticatedRequest,
   res: Response
 ): Promise<void> {
   const id = req.params.id as string;
-  const { accountStatus, reason } = req.body;
+  const { accountStatus, reason, durationValue, durationUnit } = req.body;
 
   if (!["active", "suspended", "banned"].includes(accountStatus)) {
     res.status(400).json({ error: "Invalid status" });
     return;
+  }
+
+  if (accountStatus === "suspended") {
+    if (!reason) {
+      res.status(400).json({ error: "Reason is required for suspension" });
+      return;
+    }
+    if (!Number.isInteger(durationValue) || durationValue <= 0) {
+      res.status(400).json({ error: "Duration value must be a positive integer" });
+      return;
+    }
+    if (!["hours", "days"].includes(durationUnit)) {
+      res.status(400).json({ error: "Duration unit must be 'hours' or 'days'" });
+      return;
+    }
+  }
+
+  if (accountStatus === "banned") {
+    if (!reason) {
+      res.status(400).json({ error: "Reason is required for ban" });
+      return;
+    }
   }
 
   try {
@@ -132,17 +178,52 @@ export async function updateUserStatus(
     }
 
     const now = FieldValue.serverTimestamp();
-    await docRef.update({
+    const updateData: Record<string, any> = {
       accountStatus,
       isActive: accountStatus === "active",
       updatedAt: now,
-    });
+    };
+
+    let logDetails = "";
+
+    if (accountStatus === "suspended") {
+      const durationMs = durationValue * (durationUnit === "hours" ? 3600000 : 86400000);
+      const suspendUntilMs = Date.now() + durationMs;
+      const suspendUntil = Timestamp.fromMillis(suspendUntilMs);
+      const suspendUntilDate = new Date(suspendUntilMs);
+
+      updateData.suspendReason = reason;
+      updateData.suspendedAt = now;
+      updateData.suspendUntil = suspendUntil;
+      updateData.banReason = FieldValue.delete();
+      updateData.bannedAt = FieldValue.delete();
+
+      logDetails = `Suspended for ${durationValue} ${durationUnit} (until ${suspendUntilDate.toISOString()}). Reason: ${reason}`;
+    } else if (accountStatus === "banned") {
+      updateData.banReason = reason;
+      updateData.bannedAt = now;
+      updateData.suspendReason = FieldValue.delete();
+      updateData.suspendedAt = FieldValue.delete();
+      updateData.suspendUntil = FieldValue.delete();
+
+      logDetails = `Permanently banned. Reason: ${reason}`;
+    } else if (accountStatus === "active") {
+      updateData.suspendReason = FieldValue.delete();
+      updateData.suspendedAt = FieldValue.delete();
+      updateData.suspendUntil = FieldValue.delete();
+      updateData.banReason = FieldValue.delete();
+      updateData.bannedAt = FieldValue.delete();
+
+      logDetails = `Reactivated. ${reason ? `Note: ${reason}` : ""}`;
+    }
+
+    await docRef.update(updateData);
 
     await db.collection("systemLogs").add({
       action: "user_status_changed",
       performedBy: req.user!.uid,
       targetUserId: id,
-      details: `Changed status to ${accountStatus}. Reason: ${reason || "N/A"}`,
+      details: logDetails,
       createdAt: now,
     });
 
@@ -188,7 +269,13 @@ export async function adjustCreditPoints(
 
     // Auto-flag/suspend based on credit threshold
     if (creditPoints <= 2) {
-      await docRef.update({ accountStatus: "suspended", isActive: false });
+      await docRef.update({
+        accountStatus: "suspended",
+        isActive: false,
+        suspendReason: `Automatic suspension: credit points dropped to ${creditPoints}`,
+        suspendedAt: now,
+        suspendUntil: null,
+      });
     } else if (creditPoints === 3 && oldCredits > 3) {
       // Flag — just log for now
       await db.collection("systemLogs").add({
@@ -303,7 +390,6 @@ export async function getIncomeStats(
     const snapshot = await db
       .collection("payments")
       .where("status", "==", "confirmed")
-      .orderBy("confirmedAt", "desc")
       .get();
 
     let totalIncome = 0;
@@ -316,8 +402,15 @@ export async function getIncomeStats(
       { income: number; workerPayouts: number; totalCollected: number; transactions: number }
     > = {};
 
-    for (const doc of snapshot.docs) {
-      const data = doc.data();
+    const confirmedPayments = snapshot.docs
+      .map((doc) => doc.data())
+      .sort((a, b) => {
+        const aDate = toDate(a.confirmedAt)?.getTime() ?? 0;
+        const bDate = toDate(b.confirmedAt)?.getTime() ?? 0;
+        return bDate - aDate;
+      });
+
+    for (const data of confirmedPayments) {
       const commission = data.commissionAmount || 0;
       const workerAmount = data.workerAmount || 0;
       const total = data.totalAmount || 0;
@@ -328,8 +421,8 @@ export async function getIncomeStats(
       totalTransactions++;
 
       // Get the confirmedAt date
-      const confirmedAt = data.confirmedAt?.toDate?.() ?? new Date(data.confirmedAt);
-      if (isNaN(confirmedAt.getTime())) continue;
+      const confirmedAt = toDate(data.confirmedAt);
+      if (!confirmedAt) continue;
 
       const key = getBucketKey(confirmedAt, period);
 
@@ -394,17 +487,34 @@ export async function getAnalyticsStats(
       .sort((a, b) => b.count - a.count)
       .slice(0, 6);
 
-    // Worker performance: top 10 by averageRating then completedJobsCount
+    // Worker performance: calculate from request data for each worker
     const workerPerformance = workerSnapshot.docs
       .map((doc) => {
         const data = doc.data();
         const wd = data.workerData || {};
+        const workerId = doc.id;
+
+        // Count completed jobs and calculate acceptance rate from requests
+        const workerRequests = requestSnapshot.docs.filter(
+          (req) => req.data().assignedWorkerId === workerId
+        );
+        const completedJobs = workerRequests.filter(
+          (req) => req.data().status === "payment_confirmed"
+        ).length;
+        const acceptedCount = workerRequests.filter(
+          (req) => req.data().status !== "pending" && req.data().status !== "assigned"
+        ).length;
+        const acceptanceRate =
+          workerRequests.length > 0
+            ? Math.round((acceptedCount / workerRequests.length) * 100)
+            : 0;
+
         return {
-          id: doc.id,
+          id: workerId,
           name: `${data.firstName || ""} ${data.lastName || ""}`.trim(),
           averageRating: wd.averageRating || 0,
-          completedJobs: wd.completedJobsCount || 0,
-          acceptanceRate: Math.round((wd.acceptanceRate || 0) * 100) / 100,
+          completedJobs,
+          acceptanceRate,
         };
       })
       .sort((a, b) => b.averageRating - a.averageRating || b.completedJobs - a.completedJobs)

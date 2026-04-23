@@ -311,7 +311,7 @@ export function AdminRequestDetail() {
           <p>
             <span className="text-slate-600">Time:</span>{" "}
             <span className="font-medium">
-              {request.schedule?.startTime} – {request.schedule?.endTime}
+              {request.schedule?.startTime ? `${request.schedule.startTime} – ${request.schedule.endTime}` : "No specified time"}
             </span>
           </p>
         </div>

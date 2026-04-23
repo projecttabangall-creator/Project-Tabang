@@ -32,6 +32,21 @@ interface ResolveDisputeBody {
 const disputesRef = db.collection("disputes");
 const requestsRef = db.collection("serviceRequests");
 
+type DisputeListItem = FirebaseFirestore.DocumentData & {
+  id: string;
+  createdAt?: unknown;
+};
+
+function timestampMillis(value: unknown): number {
+  if (value instanceof Timestamp) return value.toMillis();
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === "string" || typeof value === "number") {
+    const time = new Date(value).getTime();
+    return Number.isNaN(time) ? 0 : time;
+  }
+  return 0;
+}
+
 function toDate(value: any): Date | null {
   if (!value) {
     return null;
@@ -283,19 +298,21 @@ export async function listDisputes(
   try {
     const { status } = req.query;
 
-    let query: FirebaseFirestore.Query = disputesRef.orderBy("createdAt", "desc");
+    let query: FirebaseFirestore.Query = disputesRef;
 
     if (status && typeof status === "string") {
-      query = disputesRef
-        .where("status", "==", status)
-        .orderBy("createdAt", "desc");
+      query = disputesRef.where("status", "==", status);
     }
 
     const snapshot = await query.get();
-    const disputes = snapshot.docs.map((doc) => ({
+    const disputes: DisputeListItem[] = snapshot.docs.map((doc) => ({
       id: doc.id,
       ...doc.data(),
     }));
+
+    disputes.sort(
+      (a, b) => timestampMillis(b.createdAt) - timestampMillis(a.createdAt)
+    );
 
     res.json({ disputes });
   } catch (error) {

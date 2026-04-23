@@ -29,6 +29,8 @@ interface RequestFormData {
   startTime: string;
   endTime: string;
   paymentMethod: "gcash" | "cash";
+  tipEnabled: boolean;
+  tipAmount: number;
 }
 
 function MapClickHandler({
@@ -72,6 +74,7 @@ export function RequestService() {
   const [photoFiles, setPhotoFiles] = useState<File[]>([]);
   const [photoDataUrls, setPhotoDataUrls] = useState<string[]>([]);
   const [isLocating, setIsLocating] = useState(false);
+  const [noSpecifiedTime, setNoSpecifiedTime] = useState(false);
 
   const {
     register,
@@ -250,10 +253,11 @@ export function RequestService() {
         photoUrls: uploadedUrls,
         schedule: {
           date: data.date,
-          startTime: data.startTime,
-          endTime: data.endTime,
+          startTime: noSpecifiedTime ? "" : data.startTime,
+          endTime: noSpecifiedTime ? "" : data.endTime,
         },
         paymentMethod: data.paymentMethod,
+        tipAmount: data.tipEnabled ? Number(data.tipAmount || 0) : 0,
       });
 
       toast.success("Service request submitted.");
@@ -473,6 +477,7 @@ export function RequestService() {
                 type="number"
                 step="any"
                 className="input-field"
+                onWheel={(e) => e.currentTarget.blur()}
                 {...register("latitude", { required: true, valueAsNumber: true })}
               />
             </div>
@@ -482,6 +487,7 @@ export function RequestService() {
                 type="number"
                 step="any"
                 className="input-field"
+                onWheel={(e) => e.currentTarget.blur()}
                 {...register("longitude", {
                   required: true,
                   valueAsNumber: true,
@@ -508,38 +514,59 @@ export function RequestService() {
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="label flex items-center gap-1">
-                <Clock size={14} /> Start Time
-              </label>
-              <input
-                type="time"
-                className="input-field"
-                {...register("startTime", { required: "Start time is required" })}
-              />
-              {errors.startTime && (
-                <p className="text-red-500 text-xs mt-1">
-                  {errors.startTime.message}
-                </p>
-              )}
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={noSpecifiedTime}
+              onChange={(e) => {
+                setNoSpecifiedTime(e.target.checked);
+                if (e.target.checked) {
+                  setValue("startTime", "");
+                  setValue("endTime", "");
+                } else {
+                  setValue("startTime", "09:00");
+                  setValue("endTime", "17:00");
+                }
+              }}
+              className="rounded border-slate-300"
+            />
+            <span className="text-sm text-slate-600">No specified time (match any available worker)</span>
+          </label>
+
+          {!noSpecifiedTime && (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="label flex items-center gap-1">
+                  <Clock size={14} /> Start Time
+                </label>
+                <input
+                  type="time"
+                  className="input-field"
+                  {...register("startTime", { required: "Start time is required" })}
+                />
+                {errors.startTime && (
+                  <p className="text-red-500 text-xs mt-1">
+                    {errors.startTime.message}
+                  </p>
+                )}
+              </div>
+              <div>
+                <label className="label flex items-center gap-1">
+                  <Clock size={14} /> End Time
+                </label>
+                <input
+                  type="time"
+                  className="input-field"
+                  {...register("endTime", { required: "End time is required" })}
+                />
+                {errors.endTime && (
+                  <p className="text-red-500 text-xs mt-1">
+                    {errors.endTime.message}
+                  </p>
+                )}
+              </div>
             </div>
-            <div>
-              <label className="label flex items-center gap-1">
-                <Clock size={14} /> End Time
-              </label>
-              <input
-                type="time"
-                className="input-field"
-                {...register("endTime", { required: "End time is required" })}
-              />
-              {errors.endTime && (
-                <p className="text-red-500 text-xs mt-1">
-                  {errors.endTime.message}
-                </p>
-              )}
-            </div>
-          </div>
+          )}
         </div>
 
         <div className="card space-y-4">
@@ -553,6 +580,7 @@ export function RequestService() {
               type="number"
               placeholder="0"
               className="input-field"
+              onWheel={(e) => e.currentTarget.blur()}
               {...register("suggestedPrice", {
                 required: "Price is required",
                 valueAsNumber: true,
@@ -571,6 +599,36 @@ export function RequestService() {
                 Estimated total you pay: PHP {totalEstimate}
               </p>
             </div>
+
+            {/* Tip */}
+            <div className="mt-3 flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="tipEnabled"
+                {...register("tipEnabled")}
+                className="h-4 w-4 accent-primary-600"
+              />
+              <label htmlFor="tipEnabled" className="text-sm font-medium text-slate-700 cursor-pointer">
+                Add a tip for the worker
+              </label>
+            </div>
+
+            {watch("tipEnabled") && (
+              <div className="mt-2">
+                <label className="label">Tip Amount (PHP)</label>
+                <input
+                  type="number"
+                  placeholder="0"
+                  min="0"
+                  className="input-field"
+                  onWheel={(e) => e.currentTarget.blur()}
+                  {...register("tipAmount", { valueAsNumber: true, min: 0 })}
+                />
+                <p className="text-xs text-slate-500 mt-1">
+                  This tip goes directly to the worker and does not affect the service fee.
+                </p>
+              </div>
+            )}
           </div>
         </div>
 

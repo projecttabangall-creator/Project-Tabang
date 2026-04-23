@@ -19,7 +19,7 @@ interface WorkerForm {
   lastName: string;
   middleInitial: string;
   birthday: string;
-  specialization: string;
+  specialization: string[];
   contactNumber: string;
   email: string;
   password: string;
@@ -287,21 +287,31 @@ export function WorkerRegistration() {
           </div>
 
           <div>
-            <label className="label">Primary Specialization</label>
-            <select
-              className="input-field"
-              {...register("specialization", { required: "Required" })}
-            >
-              <option value="">Select category...</option>
+            <label className="label">Specialization</label>
+            <p className="text-xs text-slate-500 mb-2">Select one or more categories</p>
+            <div className="grid grid-cols-2 gap-2">
               {categories.map((cat) => (
-                <option key={cat.id} value={cat.id}>
-                  {cat.name}
-                </option>
+                <label
+                  key={cat.id}
+                  className="flex items-center gap-2 cursor-pointer p-2 rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors"
+                >
+                  <input
+                    type="checkbox"
+                    value={cat.id}
+                    className="h-4 w-4 accent-primary-600"
+                    {...register("specialization", {
+                      validate: (v) =>
+                        (Array.isArray(v) && v.length > 0) ||
+                        "Select at least one specialization",
+                    })}
+                  />
+                  <span className="text-sm">{cat.name}</span>
+                </label>
               ))}
-            </select>
+            </div>
             {errors.specialization && (
               <p className="text-red-500 text-xs mt-1">
-                {errors.specialization.message}
+                {errors.specialization.message as string}
               </p>
             )}
             {categories.length === 0 && (
@@ -319,9 +329,23 @@ export function WorkerRegistration() {
                 placeholder="09171234567"
                 className="input-field"
                 autoComplete="tel"
-                maxLength={13}
-                onKeyDown={(e) => { if (e.key.length === 1 && (!/[\d+]/.test(e.key) || e.currentTarget.value.length >= 13)) e.preventDefault(); }}
-                onPaste={(e) => { const text = e.clipboardData.getData("text"); if (!/^[\d+]*$/.test(text) || text.length > 13) e.preventDefault(); }}
+                onKeyDown={(e) => {
+                  const val = e.currentTarget.value;
+                  const maxLen = val.startsWith('+') ? 13 : 11;
+                  if (e.key.length === 1 && (!/[\d+]/.test(e.key) || val.length >= maxLen)) {
+                    e.preventDefault();
+                  }
+                }}
+                onPaste={(e) => {
+                  e.preventDefault();
+                  const raw = e.clipboardData.getData("text").replace(/[^\d+]/g, "");
+                  const maxLen = raw.startsWith('+') ? 13 : 11;
+                  const trimmed = raw.slice(0, maxLen);
+                  const nativeInput = e.currentTarget;
+                  Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")!
+                    .set!.call(nativeInput, trimmed);
+                  nativeInput.dispatchEvent(new Event("input", { bubbles: true }));
+                }}
                 {...register("contactNumber", {
                   required: "Required",
                   pattern: {

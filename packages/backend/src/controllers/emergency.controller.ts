@@ -402,13 +402,10 @@ export async function reviewApplicant(
       return;
     }
 
-    applicants[idx] = {
-      ...applicants[idx],
-      approvalStatus: body.approvalStatus,
-      approvedAt: FieldValue.serverTimestamp(),
-    };
-
-    await emergenciesRef.doc(id).update({ applicants });
+    await emergenciesRef.doc(id).update({
+      [`applicants.${idx}.approvalStatus`]: body.approvalStatus,
+      [`applicants.${idx}.approvedAt`]: Timestamp.now(),
+    });
 
     await db.collection("notifications").add({
       userId: workerId,
@@ -475,13 +472,10 @@ export async function awardApplicantCredits(
 
     const { newBalance } = await awardEmergencyCredits(workerId, body.amount, id);
 
-    applicants[idx] = {
-      ...applicants[idx],
-      creditAwarded: body.amount,
-      awardedAt: FieldValue.serverTimestamp(),
-    };
-
-    await emergenciesRef.doc(id).update({ applicants });
+    await emergenciesRef.doc(id).update({
+      [`applicants.${idx}.creditAwarded`]: body.amount,
+      [`applicants.${idx}.awardedAt`]: Timestamp.now(),
+    });
 
     await db.collection("notifications").add({
       userId: workerId,

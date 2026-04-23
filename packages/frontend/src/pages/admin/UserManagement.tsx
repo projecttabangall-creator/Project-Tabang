@@ -3,6 +3,10 @@ import { toast } from "sonner";
 import { Shield, Ban, UserCheck } from "lucide-react";
 import api from "@/services/api";
 import { BackButton } from "@/components/common/BackButton";
+import {
+  SuspendDialog,
+  StatusChangePayload,
+} from "@/components/admin/SuspendDialog";
 
 interface UserItem {
   id: string;
@@ -15,12 +19,20 @@ interface UserItem {
   isVerified: boolean;
   isActive: boolean;
   accountStatus: string;
+  suspendReason?: string;
+  suspendUntil?: string | null;
 }
 
 export function UserManagement() {
   const [users, setUsers] = useState<UserItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [roleFilter, setRoleFilter] = useState<string>("all");
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [dialogMode, setDialogMode] = useState<"suspend" | "ban" | "activate">(
+    "suspend"
+  );
+  const [dialogTarget, setDialogTarget] = useState<UserItem | null>(null);
+  const [dialogSubmitting, setDialogSubmitting] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -46,21 +58,36 @@ export function UserManagement() {
     }
   }
 
-  async function handleStatusChange(userId: string, newStatus: string) {
-    const reason = prompt(
-      `Reason for ${newStatus === "active" ? "activating" : newStatus === "suspended" ? "suspending" : "banning"} this user:`
-    );
-    if (reason === null) return; // Cancelled
+  function openDialog(user: UserItem, mode: "suspend" | "ban" | "activate") {
+    setDialogTarget(user);
+    setDialogMode(mode);
+    setDialogOpen(true);
+  }
 
+  async function handleDialogConfirm(payload: StatusChangePayload) {
+    if (!dialogTarget) return;
+    setDialogSubmitting(true);
     try {
-      await api.patch(`/api/admin/users/${userId}/status`, {
-        accountStatus: newStatus,
-        reason,
-      });
-      toast.success(`User ${newStatus}`);
+      await api.patch(`/api/admin/users/${dialogTarget.id}/status`, payload);
+      toast.success(
+        `User ${
+          payload.accountStatus === "suspended"
+            ? "suspended"
+            : payload.accountStatus === "banned"
+              ? "banned"
+              : "reactivated"
+        }`
+      );
+      setDialogOpen(false);
+      setDialogTarget(null);
       fetchUsers();
-    } catch {
-      toast.error("Failed to update user status");
+    } catch (error: any) {
+      const errorMsg =
+        error?.response?.data?.error || error?.message || "Failed to update user status";
+      toast.error(errorMsg);
+      throw error;
+    } finally {
+      setDialogSubmitting(false);
     }
   }
 
@@ -190,7 +217,7 @@ export function UserManagement() {
                 {/* Status actions */}
                 {user.accountStatus !== "active" && (
                   <button
-                    onClick={() => handleStatusChange(user.id, "active")}
+                    onClick={() => openDialog(user, "activate")}
                     className="text-emerald-600 hover:text-emerald-700"
                     title="Activate"
                   >
@@ -200,14 +227,14 @@ export function UserManagement() {
                 {user.accountStatus === "active" && user.role !== "admin" && (
                   <>
                     <button
-                      onClick={() => handleStatusChange(user.id, "suspended")}
+                      onClick={() => openDialog(user, "suspend")}
                       className="text-yellow-600 hover:text-yellow-700"
                       title="Suspend"
                     >
                       <Shield size={16} />
                     </button>
                     <button
-                      onClick={() => handleStatusChange(user.id, "banned")}
+                      onClick={() => openDialog(user, "ban")}
                       className="text-red-500 hover:text-red-600"
                       title="Ban"
                     >
@@ -219,6 +246,21 @@ export function UserManagement() {
             </div>
           ))}
         </div>
+      )}
+
+      {/* Suspend/Ban Dialog */}
+      {dialogTarget && (
+        <SuspendDialog
+          open={dialogOpen}
+          mode={dialogMode}
+          userName={`${dialogTarget.firstName} ${dialogTarget.lastName}`}
+          onConfirm={handleDialogConfirm}
+          onCancel={() => {
+            setDialogOpen(false);
+            setDialogTarget(null);
+          }}
+          isSubmitting={dialogSubmitting}
+        />
       )}
     </div>
   );

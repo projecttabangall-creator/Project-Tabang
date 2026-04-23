@@ -37,6 +37,7 @@ export interface ServiceRequest {
   priceChangeReason?: string;
   pendingFinalPrice?: number;
   pendingPriceChangeReason?: string;
+  tipAmount?: number;
   commission: number; // 10% of price
   commissionPercent: number;
   totalForResident: number; // price + commission

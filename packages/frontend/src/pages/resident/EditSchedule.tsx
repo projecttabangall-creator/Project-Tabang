@@ -21,6 +21,7 @@ export function EditSchedule() {
   const [date, setDate] = useState("");
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
+  const [noSpecifiedTime, setNoSpecifiedTime] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -42,6 +43,7 @@ export function EditSchedule() {
       setDate(dateStr);
       setStartTime(data.request.schedule.startTime);
       setEndTime(data.request.schedule.endTime);
+      setNoSpecifiedTime(!data.request.schedule.startTime);
     } catch (error: any) {
       const errorMsg = error.response?.data?.error || "Failed to load request";
       toast.error(errorMsg);
@@ -59,19 +61,19 @@ export function EditSchedule() {
       return false;
     }
 
-    if (!startTime) {
-      setError("Start time is required");
-      return false;
-    }
-
-    if (!endTime) {
-      setError("End time is required");
-      return false;
-    }
-
-    if (startTime >= endTime) {
-      setError("End time must be after start time");
-      return false;
+    if (!noSpecifiedTime) {
+      if (!startTime) {
+        setError("Start time is required");
+        return false;
+      }
+      if (!endTime) {
+        setError("End time is required");
+        return false;
+      }
+      if (startTime >= endTime) {
+        setError("End time must be after start time");
+        return false;
+      }
     }
 
     // Check if date is not in the past
@@ -98,8 +100,8 @@ export function EditSchedule() {
       await api.patch(`/api/requests/${requestId}/schedule`, {
         schedule: {
           date,
-          startTime,
-          endTime,
+          startTime: noSpecifiedTime ? "" : startTime,
+          endTime: noSpecifiedTime ? "" : endTime,
         },
       });
       toast.success("Schedule updated successfully");
@@ -144,7 +146,7 @@ export function EditSchedule() {
               {typeof request.schedule.date === "object"
                 ? new Date(request.schedule.date._seconds * 1000).toLocaleDateString()
                 : request.schedule.date}{" "}
-              {request.schedule.startTime} - {request.schedule.endTime}
+              {request.schedule.startTime ? `${request.schedule.startTime} - ${request.schedule.endTime}` : "No specified time"}
             </span>
           </p>
         </div>
@@ -169,26 +171,47 @@ export function EditSchedule() {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="label">Start Time</label>
-              <input
-                type="time"
-                value={startTime}
-                onChange={(e) => setStartTime(e.target.value)}
-                className="input-field"
-              />
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={noSpecifiedTime}
+              onChange={(e) => {
+                setNoSpecifiedTime(e.target.checked);
+                if (e.target.checked) {
+                  setStartTime("");
+                  setEndTime("");
+                } else {
+                  setStartTime("09:00");
+                  setEndTime("17:00");
+                }
+              }}
+              className="rounded border-slate-300"
+            />
+            <span className="text-sm text-slate-600">No specified time (match any available worker)</span>
+          </label>
+
+          {!noSpecifiedTime && (
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="label">Start Time</label>
+                <input
+                  type="time"
+                  value={startTime}
+                  onChange={(e) => setStartTime(e.target.value)}
+                  className="input-field"
+                />
+              </div>
+              <div>
+                <label className="label">End Time</label>
+                <input
+                  type="time"
+                  value={endTime}
+                  onChange={(e) => setEndTime(e.target.value)}
+                  className="input-field"
+                />
+              </div>
             </div>
-            <div>
-              <label className="label">End Time</label>
-              <input
-                type="time"
-                value={endTime}
-                onChange={(e) => setEndTime(e.target.value)}
-                className="input-field"
-              />
-            </div>
-          </div>
+          )}
 
           <div className="flex gap-3 pt-4">
             <button

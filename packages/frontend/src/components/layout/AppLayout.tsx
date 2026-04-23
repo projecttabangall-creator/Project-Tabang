@@ -1,5 +1,6 @@
 import { Outlet, NavLink } from "react-router-dom";
 import { MobileNav } from "./MobileNav";
+import { SuspensionOverlay } from "./SuspensionOverlay";
 import { useAuth } from "@/contexts/AuthContext";
 import { LogOut } from "lucide-react";
 import { getNavItems } from "./navItems";
@@ -83,7 +84,15 @@ export function AppLayout() {
         {/* Main content */}
         <main className="flex-1 px-4 py-6 pb-24 md:pb-6 overflow-y-auto">
           <div className="max-w-7xl mx-auto">
-            <Outlet />
+            {userProfile &&
+            userProfile.role !== "admin" &&
+            userProfile.role !== "superadmin" &&
+            (userProfile.accountStatus === "suspended" ||
+              userProfile.accountStatus === "banned") ? (
+              <SuspensionOverlay userProfile={userProfile} onSignOut={signOut} />
+            ) : (
+              <Outlet />
+            )}
           </div>
         </main>
       </div>

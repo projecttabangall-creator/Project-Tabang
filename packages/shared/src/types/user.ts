@@ -18,7 +18,7 @@ export type AvailabilitySlot =
   | { dayOfWeek: number; startTime: string; endTime: string }; // legacy/backward compat - treated as recurring
 
 export interface WorkerData {
-  specialization: string; // category ID
+  specialization: string[]; // category IDs
   credentials: Credential[];
   biometricEnrolled: boolean;
   averageRating: number;
@@ -54,6 +54,11 @@ export interface User {
   isVerified: boolean;
   isActive: boolean;
   accountStatus: AccountStatus;
+  suspendReason?: string;
+  suspendUntil?: Date | null;
+  suspendedAt?: Date;
+  banReason?: string;
+  bannedAt?: Date;
   otpVerified: boolean;
   failedLoginAttempts: number;
   lockedUntil?: Date;

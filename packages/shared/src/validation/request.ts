@@ -13,10 +13,11 @@ export const createRequestSchema = z.object({
   photoUrls: z.array(z.string()).optional().default([]),
   schedule: z.object({
     date: z.string().min(1, "Date is required"),
-    startTime: z.string().regex(/^\d{2}:\d{2}$/, "Invalid time format"),
-    endTime: z.string().regex(/^\d{2}:\d{2}$/, "Invalid time format"),
+    startTime: z.string().regex(/^(\d{2}:\d{2})?$/, "Invalid time format"),
+    endTime: z.string().regex(/^(\d{2}:\d{2})?$/, "Invalid time format"),
   }),
   paymentMethod: z.enum(["gcash", "cash"]),
+  tipAmount: z.number().nonnegative("Tip cannot be negative").optional().default(0),
   isSpecialRequest: z.boolean().optional().default(false),
   specialRequestNote: z.string().optional(),
 });
@@ -56,8 +57,8 @@ export const cancelRequestSchema = z.object({
 export const updateScheduleSchema = z.object({
   schedule: z.object({
     date: z.string().min(1, "Date is required"),
-    startTime: z.string().regex(/^\d{2}:\d{2}$/, "Invalid time format"),
-    endTime: z.string().regex(/^\d{2}:\d{2}$/, "Invalid time format"),
+    startTime: z.string().regex(/^(\d{2}:\d{2})?$/, "Invalid time format"),
+    endTime: z.string().regex(/^(\d{2}:\d{2})?$/, "Invalid time format"),
   }),
 });
 

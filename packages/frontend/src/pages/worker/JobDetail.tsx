@@ -28,6 +28,7 @@ interface Request {
   commission: number;
   commissionPercent?: number;
   totalForResident: number;
+  tipAmount?: number;
   priceChangeReason?: string;
   location: any;
   schedule: { date: any; startTime: string; endTime: string };
@@ -386,6 +387,16 @@ export function JobDetail() {
           </div>
         )}
 
+        {(request.tipAmount ?? 0) > 0 && (
+          <div className="rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 flex items-center justify-between">
+            <div>
+              <p className="text-sm font-semibold text-amber-800">🎁 Tip from Resident</p>
+              <p className="text-xs text-amber-600 mt-0.5">Does not affect service fee</p>
+            </div>
+            <p className="text-xl font-bold text-amber-700">PHP {request.tipAmount}</p>
+          </div>
+        )}
+
         <p className="text-xs text-slate-500">
           Final price must be at least the item minimum. Above 2x the suggested
           price needs admin approval.
@@ -404,7 +415,7 @@ export function JobDetail() {
           <p>
             <span className="text-slate-600">Time:</span>{" "}
             <span className="font-medium">
-              {request.schedule.startTime} - {request.schedule.endTime}
+              {request.schedule.startTime ? `${request.schedule.startTime} - ${request.schedule.endTime}` : "No specified time"}
             </span>
           </p>
         </div>

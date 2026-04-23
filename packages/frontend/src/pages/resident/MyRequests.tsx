@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Briefcase, Clock, MapPin, Star, Edit2 } from "lucide-react";
@@ -22,7 +22,7 @@ interface Request {
   createdAt?: any;
 }
 
-type Tab = "active" | "payment" | "recent" | "history";
+type Tab = "active" | "payment" | "history";
 
 const ACTIVE_STATUSES = [
   "pending",
@@ -34,6 +34,7 @@ const ACTIVE_STATUSES = [
 ];
 const PAYMENT_STATUSES = ["completed", "payment_submitted"];
 const COMPLETED_STATUSES = ["payment_confirmed"];
+const HISTORY_STATUSES = [...COMPLETED_STATUSES, "cancelled"];
 
 export function MyRequests() {
   useAuth();
@@ -41,15 +42,10 @@ export function MyRequests() {
   const [activeTab, setActiveTab] = useState<Tab>("active");
   const [isLoading, setIsLoading] = useState(true);
   const [requests, setRequests] = useState<Request[]>([]);
-  const [filteredRequests, setFilteredRequests] = useState<Request[]>([]);
 
   useEffect(() => {
     fetchRequests();
   }, []);
-
-  useEffect(() => {
-    filterRequests();
-  }, [activeTab, requests]);
 
   const fetchRequests = async () => {
     try {
@@ -62,48 +58,22 @@ export function MyRequests() {
     }
   };
 
-  const parseFirestoreDate = (value: any): Date | null => {
-    if (!value) return null;
-    // Handle Firestore Timestamp object
-    if (typeof value === "object" && value._seconds) {
-      return new Date(value._seconds * 1000);
-    }
-    // Handle regular date string or number
-    return new Date(value);
-  };
+  const requestGroups = useMemo(
+    () => ({
+      active: requests.filter((request) =>
+        ACTIVE_STATUSES.includes(request.status)
+      ),
+      payment: requests.filter((request) =>
+        PAYMENT_STATUSES.includes(request.status)
+      ),
+      history: requests.filter((request) =>
+        HISTORY_STATUSES.includes(request.status)
+      ),
+    }),
+    [requests]
+  );
 
-  const filterRequests = () => {
-    const now = new Date();
-    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-
-    let filtered: Request[] = [];
-
-    if (activeTab === "active") {
-      filtered = requests.filter((r) => ACTIVE_STATUSES.includes(r.status));
-    } else if (activeTab === "payment") {
-      filtered = requests.filter((r) => PAYMENT_STATUSES.includes(r.status));
-    } else if (activeTab === "recent") {
-      filtered = requests.filter((r) => {
-        const isCompleted = COMPLETED_STATUSES.includes(r.status);
-        // Use completedAt if available, fallback to updatedAt
-        const dateValue = r.completedAt || r.updatedAt;
-        const completedDate = parseFirestoreDate(dateValue);
-        const isRecent = completedDate ? completedDate > thirtyDaysAgo : false;
-        return isCompleted && isRecent;
-      });
-    } else if (activeTab === "history") {
-      filtered = requests.filter((r) => {
-        const isCompleted = COMPLETED_STATUSES.includes(r.status);
-        // Use completedAt if available, fallback to updatedAt
-        const dateValue = r.completedAt || r.updatedAt;
-        const completedDate = parseFirestoreDate(dateValue);
-        const isOld = completedDate ? completedDate <= thirtyDaysAgo : false;
-        return isCompleted && isOld;
-      });
-    }
-
-    setFilteredRequests(filtered);
-  };
+  const filteredRequests = requestGroups[activeTab];
 
   const getStatusColor = (status: string) => {
     const colors: Record<string, string> = {
@@ -152,10 +122,9 @@ export function MyRequests() {
 
       {/* Tabs */}
       <div className="flex gap-2 border-b border-slate-200 overflow-x-auto">
-        {(["active", "payment", "recent", "history"] as const).map((tab) => {
+        {(["active", "payment", "history"] as const).map((tab) => {
           const tabLabel = tab === "payment" ? "Pending Payment" : tab.charAt(0).toUpperCase() + tab.slice(1);
-          const tabCount = tab === "active" ? requests.filter(r => ACTIVE_STATUSES.includes(r.status)).length :
-                          tab === "payment" ? requests.filter(r => PAYMENT_STATUSES.includes(r.status)).length : 0;
+          const tabCount = requestGroups[tab].length;
 
           return (
             <button
@@ -168,14 +137,9 @@ export function MyRequests() {
               }`}
             >
               {tabLabel}
-              {(tab === "active" || tab === "payment") && tabCount > 0 && (
+              {tabCount > 0 && (
                 <span className="ml-2 inline-block bg-primary-100 text-primary-700 rounded-full px-2 py-0.5 text-xs font-semibold">
                   {tabCount}
-                </span>
-              )}
-              {activeTab === tab && filteredRequests.length > 0 && !(tab === "active" || tab === "payment") && (
-                <span className="ml-2 inline-block bg-primary-100 text-primary-700 rounded-full px-2 py-0.5 text-xs font-semibold">
-                  {filteredRequests.length}
                 </span>
               )}
             </button>
@@ -192,8 +156,6 @@ export function MyRequests() {
               ? "No active requests"
               : activeTab === "payment"
               ? "No pending payments"
-              : activeTab === "recent"
-              ? "No recent completed requests"
               : "No history"}
           </p>
           <p className="text-sm text-slate-400 mt-2">
@@ -201,7 +163,7 @@ export function MyRequests() {
               ? "Submit a new service request to get started"
               : activeTab === "payment"
               ? "Your completed jobs awaiting payment will appear here"
-              : "Your completed requests will appear here"}
+              : "Completed and cancelled requests will appear here"}
           </p>
         </div>
       ) : (
@@ -241,7 +203,7 @@ export function MyRequests() {
                   {typeof request.schedule.date === "object"
                     ? new Date(request.schedule.date._seconds * 1000).toLocaleDateString()
                     : request.schedule.date}{" "}
-                  {request.schedule.startTime}
+                  {request.schedule.startTime ? `${request.schedule.startTime}` : "No specified time"}
                 </span>
                 <span className="flex items-center gap-1">
                   <MapPin size={14} />
@@ -281,6 +243,8 @@ export function MyRequests() {
                   <span className="text-xs text-slate-400">
                     {ACTIVE_STATUSES.includes(request.status)
                       ? "Ongoing"
+                      : request.status === "cancelled"
+                      ? "Cancelled"
                       : "Completed"}
                   </span>
                 </div>

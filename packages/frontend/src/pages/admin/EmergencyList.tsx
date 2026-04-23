@@ -19,8 +19,22 @@ interface EmergencyItem {
   affectedFamilies: number;
   durationHours: number;
   status: "active" | "completed" | "cancelled";
-  applicants?: Array<{ workerId: string; approvalStatus: string }>;
+  applicants: Array<{ workerId: string; approvalStatus: string }>;
   createdAt?: any;
+}
+
+function asArray<T>(value: unknown): T[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function normalizeEmergency(item: any): EmergencyItem {
+  return {
+    ...item,
+    categoryNames: asArray<string>(item?.categoryNames),
+    applicants: asArray<{ workerId: string; approvalStatus: string }>(
+      item?.applicants
+    ),
+  };
 }
 
 const STATUS_TABS: Array<{ key: EmergencyItem["status"]; label: string }> = [
@@ -49,7 +63,10 @@ export function EmergencyList() {
     setLoading(true);
     try {
       const { data } = await api.get(`/api/emergencies?status=${status}`);
-      setEmergencies(data.emergencies || []);
+      const emergencyItems = asArray<any>(data.emergencies).map(
+        normalizeEmergency
+      );
+      setEmergencies(emergencyItems);
     } catch {
       toast.error("Failed to load emergencies");
     } finally {
@@ -110,7 +127,7 @@ export function EmergencyList() {
       ) : (
         <div className="space-y-3">
           {emergencies.map((e) => {
-            const pendingApplicants = (e.applicants ?? []).filter(
+            const pendingApplicants = e.applicants.filter(
               (a) => a.approvalStatus === "pending"
             ).length;
             return (
@@ -130,7 +147,7 @@ export function EmergencyList() {
                       </span>
                     </div>
                     <div className="flex flex-wrap gap-1.5 mt-2">
-                      {e.categoryNames?.map((name) => (
+                      {e.categoryNames.map((name) => (
                         <span key={name} className="badge-primary">
                           {name}
                         </span>
@@ -150,7 +167,7 @@ export function EmergencyList() {
                         {e.durationHours}h
                       </span>
                       <span>
-                        {e.applicants?.length ?? 0} applicants
+                        {e.applicants.length} applicants
                         {pendingApplicants > 0 && (
                           <span className="ml-1 text-accent-600 font-semibold">
                             ({pendingApplicants} pending)

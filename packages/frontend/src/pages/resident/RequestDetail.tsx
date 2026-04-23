@@ -25,6 +25,7 @@ interface Request {
   commission: number;
   commissionPercent?: number;
   totalForResident: number;
+  tipAmount?: number;
   location: any;
   schedule: { date: any; startTime: string; endTime: string };
   status: string;
@@ -267,6 +268,14 @@ export function RequestDetail() {
             <span>Total You Pay</span>
             <span>PHP {request.totalForResident}</span>
           </div>
+          {(request.tipAmount ?? 0) > 0 && request.status !== "pending" && (
+            <div className="mt-2 flex justify-between rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-sm">
+              <span className="text-amber-800 font-medium flex items-center gap-1">
+                🎁 Tip for Worker
+              </span>
+              <span className="font-semibold text-amber-700">PHP {request.tipAmount}</span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -289,7 +298,7 @@ export function RequestDetail() {
           <p>
             <span className="text-slate-600">Time:</span>{" "}
             <span className="font-medium">
-              {request.schedule.startTime} - {request.schedule.endTime}
+              {request.schedule.startTime ? `${request.schedule.startTime} - ${request.schedule.endTime}` : "No specified time"}
             </span>
           </p>
         </div>

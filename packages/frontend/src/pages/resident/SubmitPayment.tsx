@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { Camera, CheckCircle, Upload, X, Star } from "lucide-react";
 import api from "@/services/api";
 import { BackButton } from "@/components/common/BackButton";
+import { uploadFile } from "@/utils/uploadFile";
 
 interface RequestData {
   id: string;
@@ -30,6 +31,7 @@ export function SubmitPayment() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [request, setRequest] = useState<RequestData | null>(null);
   const [proofDataUrl, setProofDataUrl] = useState<string | null>(null);
+  const [proofFile, setProofFile] = useState<File | null>(null);
   const [rating, setRating] = useState(0);
   const [ratingComment, setRatingComment] = useState("");
   const [hoverRating, setHoverRating] = useState(0);
@@ -73,6 +75,7 @@ export function SubmitPayment() {
     reader.onload = (e) => {
       const dataUrl = e.target?.result as string;
       setProofDataUrl(dataUrl);
+      setProofFile(file);
       toast.success("Photo selected");
     };
     reader.onerror = () => {
@@ -91,6 +94,7 @@ export function SubmitPayment() {
 
   const handleRemovePhoto = () => {
     setProofDataUrl(null);
+    setProofFile(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -108,9 +112,13 @@ export function SubmitPayment() {
 
     setIsSubmitting(true);
     try {
+      const compressedProofUrl = proofFile
+        ? await uploadFile(`payments/${requestId}`, proofFile)
+        : proofDataUrl;
+
       await api.post("/api/payments", {
         requestId,
-        proofUrl: proofDataUrl,
+        proofUrl: compressedProofUrl,
         rating,
         ratingComment,
       });

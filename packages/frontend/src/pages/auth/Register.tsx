@@ -161,8 +161,23 @@ export function Register() {
                 placeholder="09171234567"
                 className="input-field"
                 autoComplete="tel"
-                onKeyDown={(e) => { if (e.key.length === 1 && !/[\d+]/.test(e.key)) e.preventDefault(); }}
-                onPaste={(e) => { if (!/^[\d+]*$/.test(e.clipboardData.getData("text"))) e.preventDefault(); }}
+                onKeyDown={(e) => {
+                  const val = e.currentTarget.value;
+                  const maxLen = val.startsWith('+') ? 13 : 11;
+                  if (e.key.length === 1 && (!/[\d+]/.test(e.key) || val.length >= maxLen)) {
+                    e.preventDefault();
+                  }
+                }}
+                onPaste={(e) => {
+                  e.preventDefault();
+                  const raw = e.clipboardData.getData("text").replace(/[^\d+]/g, "");
+                  const maxLen = raw.startsWith('+') ? 13 : 11;
+                  const trimmed = raw.slice(0, maxLen);
+                  const nativeInput = e.currentTarget;
+                  Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")!
+                    .set!.call(nativeInput, trimmed);
+                  nativeInput.dispatchEvent(new Event("input", { bubbles: true }));
+                }}
                 {...register("contactNumber", {
                   required: "Required",
                   pattern: {

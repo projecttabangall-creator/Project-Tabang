@@ -198,6 +198,7 @@ async function createRequestRecord(
       endTime: body.schedule.endTime,
     },
     paymentMethod: body.paymentMethod,
+    tipAmount: body.tipAmount ?? 0,
     status: REQUEST_STATUSES.PENDING,
     assignmentAttempts: 0,
     excludedWorkerIds: [],

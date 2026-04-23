@@ -4,6 +4,7 @@ import {
   useEffect,
   useState,
   ReactNode,
+  useRef,
 } from "react";
 import {
   onAuthStateChanged,
@@ -11,7 +12,7 @@ import {
   signOut as firebaseSignOut,
   User as FirebaseUser,
 } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, onSnapshot } from "firebase/firestore";
 import { firebaseAuth, firestore } from "@/config/firebase";
 import { UserRole } from "@tabang/shared";
 
@@ -37,7 +38,7 @@ interface WorkerData {
   availability: AvailabilitySlot[];
 }
 
-interface UserProfile {
+export interface UserProfile {
   uid: string;
   role: UserRole;
   firstName: string;
@@ -46,6 +47,11 @@ interface UserProfile {
   email?: string;
   isVerified: boolean;
   accountStatus: string;
+  suspendReason?: string;
+  suspendUntil?: Date | null;
+  suspendedAt?: Date;
+  banReason?: string;
+  bannedAt?: Date;
   creditPoints: number;
   profilePhotoUrl?: string;
   workerData?: WorkerData;
@@ -66,50 +72,78 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const profileUnsubscribeRef = useRef<(() => void) | null>(null);
 
-  // Fetch user profile from Firestore
-  async function fetchUserProfile(uid: string): Promise<UserProfile | null> {
-    const userDoc = await getDoc(doc(firestore, "users", uid));
-    if (!userDoc.exists()) return null;
-
-    const data = userDoc.data();
-    return {
-      uid,
-      role: data.role as UserRole,
-      firstName: data.firstName,
-      lastName: data.lastName,
-      contactNumber: data.contactNumber,
-      email: data.email,
-      isVerified: data.isVerified,
-      accountStatus: data.accountStatus,
-      creditPoints: data.creditPoints,
-      profilePhotoUrl: data.profilePhotoUrl,
-      workerData: data.workerData,
-    };
+  // Helper to convert Firestore Timestamp to Date
+  function toDate(value: any): Date | null {
+    if (!value) return null;
+    if (value instanceof Date) return value;
+    if (typeof value.toDate === "function") return value.toDate();
+    return null;
   }
 
-  // Listen to auth state changes
+  // Listen to auth state changes and set up real-time profile listener
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(firebaseAuth, async (user) => {
+    const unsubscribeAuth = onAuthStateChanged(firebaseAuth, (user) => {
       setLoading(true);
-      try {
-        setFirebaseUser(user);
-        if (user) {
-          const profile = await fetchUserProfile(user.uid);
-          setUserProfile(profile);
-        } else {
-          setUserProfile(null);
-        }
-      } catch (error) {
-        console.error("Auth state change error:", error);
-        setFirebaseUser(null);
+      setFirebaseUser(user);
+
+      // Clean up any previous Firestore listener
+      if (profileUnsubscribeRef.current) {
+        profileUnsubscribeRef.current();
+        profileUnsubscribeRef.current = null;
+      }
+
+      if (user) {
+        // Set up real-time listener for user profile
+        const userDocRef = doc(firestore, "users", user.uid);
+        profileUnsubscribeRef.current = onSnapshot(
+          userDocRef,
+          (snap) => {
+            if (!snap.exists()) {
+              setUserProfile(null);
+              setLoading(false);
+              return;
+            }
+
+            const data = snap.data();
+            setUserProfile({
+              uid: user.uid,
+              role: data.role as UserRole,
+              firstName: data.firstName,
+              lastName: data.lastName,
+              contactNumber: data.contactNumber,
+              email: data.email,
+              isVerified: data.isVerified,
+              accountStatus: data.accountStatus,
+              suspendReason: data.suspendReason,
+              suspendUntil: toDate(data.suspendUntil) ?? undefined,
+              suspendedAt: toDate(data.suspendedAt) ?? undefined,
+              banReason: data.banReason,
+              bannedAt: toDate(data.bannedAt) ?? undefined,
+              creditPoints: data.creditPoints,
+              profilePhotoUrl: data.profilePhotoUrl,
+              workerData: data.workerData,
+            });
+            setLoading(false);
+          },
+          () => {
+            setUserProfile(null);
+            setLoading(false);
+          }
+        );
+      } else {
         setUserProfile(null);
-      } finally {
         setLoading(false);
       }
     });
 
-    return unsubscribe;
+    return () => {
+      unsubscribeAuth();
+      if (profileUnsubscribeRef.current) {
+        profileUnsubscribeRef.current();
+      }
+    };
   }, []);
 
   // Sign in with contact number (converted to email format) and password
@@ -124,11 +158,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUserProfile(null);
   }
 
-  // Refresh profile data
+  // Refresh profile data (kept for backward compatibility but works via onSnapshot now)
   async function refreshProfile() {
     if (firebaseUser) {
-      const profile = await fetchUserProfile(firebaseUser.uid);
-      setUserProfile(profile);
+      const userDoc = await getDoc(doc(firestore, "users", firebaseUser.uid));
+      if (!userDoc.exists()) {
+        setUserProfile(null);
+        return;
+      }
+
+      const data = userDoc.data();
+      setUserProfile({
+        uid: firebaseUser.uid,
+        role: data.role as UserRole,
+        firstName: data.firstName,
+        lastName: data.lastName,
+        contactNumber: data.contactNumber,
+        email: data.email,
+        isVerified: data.isVerified,
+        accountStatus: data.accountStatus,
+        suspendReason: data.suspendReason,
+        suspendUntil: toDate(data.suspendUntil) ?? undefined,
+        suspendedAt: toDate(data.suspendedAt) ?? undefined,
+        banReason: data.banReason,
+        bannedAt: toDate(data.bannedAt) ?? undefined,
+        creditPoints: data.creditPoints,
+        profilePhotoUrl: data.profilePhotoUrl,
+        workerData: data.workerData,
+      });
     }
   }
 

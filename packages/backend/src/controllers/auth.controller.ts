@@ -9,7 +9,7 @@ import {
   DEFAULT_CREDIT_POINTS,
   ROLES,
 } from "@tabang/shared";
-import { FieldValue } from "firebase-admin/firestore";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 
 function hashOtp(otp: string): string {
   return createHash("sha256").update(otp).digest("hex");
@@ -24,6 +24,11 @@ export async function registerResident(
   res: Response
 ): Promise<void> {
   const body = req.body as RegisterResidentInput;
+
+  if (!body.contactNumber || body.contactNumber.trim() === "") {
+    res.status(400).json({ error: "Contact number is required" });
+    return;
+  }
 
   try {
     // Check if contact number already exists
@@ -156,6 +161,11 @@ export async function verifyOtp(req: Request, res: Response): Promise<void> {
 export async function login(req: Request, res: Response): Promise<void> {
   const body = req.body as LoginInput;
 
+  if (!body.contactNumber || body.contactNumber.trim() === "") {
+    res.status(400).json({ error: "Contact number is required" });
+    return;
+  }
+
   try {
     // Find user by contact number
     const userQuery = await db
@@ -174,8 +184,38 @@ export async function login(req: Request, res: Response): Promise<void> {
 
     // Check account status
     if (userData.accountStatus === "suspended") {
-      res.status(403).json({ error: "Account is suspended" });
-      return;
+      // Check if timed suspension has expired
+      if (userData.suspendUntil) {
+        const suspendUntil = userData.suspendUntil.toDate
+          ? userData.suspendUntil.toDate()
+          : new Date(userData.suspendUntil);
+        if (new Date() >= suspendUntil) {
+          // Auto-lift expired suspension
+          await userDoc.ref.update({
+            accountStatus: "active",
+            isActive: true,
+            suspendReason: FieldValue.delete(),
+            suspendedAt: FieldValue.delete(),
+            suspendUntil: FieldValue.delete(),
+            updatedAt: FieldValue.serverTimestamp(),
+          });
+          // Fall through to allow login
+        } else {
+          res.status(403).json({
+            error: "Account is suspended",
+            suspendUntil: suspendUntil.toISOString(),
+            suspendReason: userData.suspendReason ?? null,
+          });
+          return;
+        }
+      } else {
+        // Indefinite suspension (credit-system or manual without duration)
+        res.status(403).json({
+          error: "Account is suspended",
+          suspendReason: userData.suspendReason ?? null,
+        });
+        return;
+      }
     }
     if (userData.accountStatus === "banned") {
       res.status(403).json({ error: "Account is banned" });

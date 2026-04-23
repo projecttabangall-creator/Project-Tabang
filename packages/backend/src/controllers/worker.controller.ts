@@ -15,6 +15,11 @@ import { attemptRequestAssignment } from "../services/requestAssignment.service"
 const usersRef = db.collection("users");
 const CONTACT_ALREADY_REGISTERED_ERROR = "Contact number already registered";
 
+function toSpecArray(val: string | string[] | undefined): string[] {
+  if (!val) return [];
+  return Array.isArray(val) ? val : [val];
+}
+
 function buildAuthEmail(contactNumber: string): string {
   return `${contactNumber.trim().replace(/\+/g, "")}@tabang.local`;
 }
@@ -269,7 +274,7 @@ export async function registerWorker(
         action: "worker_registration_recovered",
         performedBy: req.user!.uid,
         targetUserId: recreatedUser.uid,
-        details: `Recovered missing Auth record for worker: ${body.firstName} ${body.lastName} (${body.specialization})`,
+        details: `Recovered missing Auth record for worker: ${body.firstName} ${body.lastName} (${toSpecArray(body.specialization).join(", ")})`,
         createdAt: now,
       });
 
@@ -343,8 +348,8 @@ export async function registerWorker(
       performedBy: req.user!.uid,
       targetUserId: userRecord.uid,
       details: recoveredOrphanAuth
-        ? `Recovered orphan Auth account for worker: ${body.firstName} ${body.lastName} (${body.specialization})`
-        : `Registered worker: ${body.firstName} ${body.lastName} (${body.specialization})`,
+        ? `Recovered orphan Auth account for worker: ${body.firstName} ${body.lastName} (${toSpecArray(body.specialization).join(", ")})`
+        : `Registered worker: ${body.firstName} ${body.lastName} (${toSpecArray(body.specialization).join(", ")})`,
       createdAt: now,
     });
 
@@ -404,8 +409,8 @@ export async function listWorkers(
     });
 
     if (category) {
-      workers = workers.filter(
-        (worker) => worker.workerData?.specialization === category
+      workers = workers.filter((worker) =>
+        toSpecArray(worker.workerData?.specialization).includes(category as string)
       );
     }
 
@@ -553,22 +558,25 @@ export async function toggleAvailability(
 
     await docRef.update(updateData);
 
-    // If turning availability ON, scan for pending requests in this worker's category
+    // If turning availability ON, scan for pending requests in this worker's categories
     if (newAvailability) {
       const workerData = doc.data()!.workerData;
-      const categoryId = workerData?.specialization;
+      const specs = toSpecArray(workerData?.specialization);
 
-      if (categoryId) {
-        // Find all pending requests in this category
-        const pendingRequests = await db
-          .collection("serviceRequests")
-          .where("categoryId", "==", categoryId)
-          .where("status", "==", "pending")
-          .where("assignedWorkerId", "==", null)
-          .get();
+      if (specs.length > 0) {
+        const pendingSnaps = await Promise.all(
+          specs.map((categoryId) =>
+            db
+              .collection("serviceRequests")
+              .where("categoryId", "==", categoryId)
+              .where("status", "==", "pending")
+              .where("assignedWorkerId", "==", null)
+              .get()
+          )
+        );
+        const pendingRequests = pendingSnaps.flatMap((s) => s.docs);
 
-        // Attempt assignment for each pending request
-        for (const requestDoc of pendingRequests.docs) {
+        for (const requestDoc of pendingRequests) {
           try {
             await attemptRequestAssignment(requestDoc.id, requestDoc.data());
           } catch (assignmentError) {
@@ -625,17 +633,23 @@ export async function updateSchedule(
     // Fire-and-forget: scan for pending requests in the background
     // Errors here must not affect the response already sent above
     const workerData = doc.data()!.workerData;
-    const categoryId = workerData?.specialization;
+    const specs = toSpecArray(workerData?.specialization);
     const isWorkerAvailable = workerData?.isAvailable;
 
-    if (categoryId && isWorkerAvailable) {
-      db.collection("serviceRequests")
-        .where("categoryId", "==", categoryId)
-        .where("status", "==", "pending")
-        .where("assignedWorkerId", "==", null)
-        .get()
-        .then((pendingRequests) => {
-          for (const requestDoc of pendingRequests.docs) {
+    if (specs.length > 0 && isWorkerAvailable) {
+      Promise.all(
+        specs.map((categoryId) =>
+          db
+            .collection("serviceRequests")
+            .where("categoryId", "==", categoryId)
+            .where("status", "==", "pending")
+            .where("assignedWorkerId", "==", null)
+            .get()
+        )
+      )
+        .then((snaps) => {
+          const pendingRequests = snaps.flatMap((s) => s.docs);
+          for (const requestDoc of pendingRequests) {
             attemptRequestAssignment(requestDoc.id, requestDoc.data()).catch(
               (assignmentError) =>
                 console.error(

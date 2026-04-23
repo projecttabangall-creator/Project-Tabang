@@ -1,7 +1,7 @@
 import { Response } from "express";
 import { AuthenticatedRequest } from "../middleware/auth";
 import { db } from "../config/firebase";
-import { FieldValue } from "firebase-admin/firestore";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { PAYMENT_STATUSES, REQUEST_STATUSES } from "@tabang/shared";
 import {
   calculateCommission,
@@ -18,6 +18,21 @@ interface SubmitPaymentBody {
 
 const paymentsRef = db.collection("payments");
 const requestsRef = db.collection("serviceRequests");
+
+type PaymentListItem = FirebaseFirestore.DocumentData & {
+  id: string;
+  createdAt?: unknown;
+};
+
+function timestampMillis(value: unknown): number {
+  if (value instanceof Timestamp) return value.toMillis();
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === "string" || typeof value === "number") {
+    const time = new Date(value).getTime();
+    return Number.isNaN(time) ? 0 : time;
+  }
+  return 0;
+}
 
 /**
  * POST /api/payments
@@ -51,11 +66,13 @@ export async function submitPayment(
 
     const existing = await paymentsRef
       .where("requestId", "==", body.requestId)
-      .where("status", "!=", PAYMENT_STATUSES.REJECTED)
-      .limit(1)
       .get();
 
-    if (!existing.empty) {
+    const hasActivePayment = existing.docs.some(
+      (doc) => doc.data().status !== PAYMENT_STATUSES.REJECTED
+    );
+
+    if (hasActivePayment) {
       res.status(400).json({ error: "Payment already submitted for this request" });
       return;
     }
@@ -116,23 +133,28 @@ export async function submitPayment(
     if (body.rating && !requestData.rating) {
       const workerId = requestData.assignedWorkerId;
       if (workerId) {
-        const ratedRequests = await requestsRef
-          .where("assignedWorkerId", "==", workerId)
-          .where("rating", ">", 0)
-          .get();
+        try {
+          const ratedRequests = await requestsRef
+            .where("assignedWorkerId", "==", workerId)
+            .where("rating", ">", 0)
+            .get();
 
-        if (!ratedRequests.empty) {
-          const ratings = ratedRequests.docs.map((doc) => {
-            const data = doc.data();
-            return typeof data.rating === "number" ? data.rating : 0;
-          });
-          const sum = ratings.reduce((a, b) => a + b, 0);
-          const average =
-            Math.round((sum / ratings.length) * 10) / 10;
+          if (!ratedRequests.empty) {
+            const ratings = ratedRequests.docs.map((doc) => {
+              const data = doc.data();
+              return typeof data.rating === "number" ? data.rating : 0;
+            });
+            const sum = ratings.reduce((a, b) => a + b, 0);
+            const average =
+              Math.round((sum / ratings.length) * 10) / 10;
 
-          await db.collection("users").doc(workerId).update({
-            "workerData.averageRating": average,
-          });
+            await db.collection("users").doc(workerId).update({
+              "workerData.averageRating": average,
+            });
+          }
+        } catch (ratingError) {
+          console.warn("Warning: Failed to update worker average rating:", ratingError);
+          // Don't fail the payment submission if rating update fails
         }
       }
     }
@@ -184,13 +206,16 @@ export async function getPendingPayments(
   try {
     const snapshot = await paymentsRef
       .where("status", "==", PAYMENT_STATUSES.PENDING)
-      .orderBy("createdAt", "desc")
       .get();
 
-    const payments = snapshot.docs.map((doc) => ({
+    const payments: PaymentListItem[] = snapshot.docs.map((doc) => ({
       id: doc.id,
       ...doc.data(),
     }));
+
+    payments.sort(
+      (a, b) => timestampMillis(b.createdAt) - timestampMillis(a.createdAt)
+    );
 
     res.json({ payments });
   } catch (error) {

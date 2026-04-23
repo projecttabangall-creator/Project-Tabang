@@ -33,7 +33,7 @@ export const registerWorkerSchema = z.object({
   lastName: z.string().min(1, "Last name is required"),
   middleInitial: z.string().max(1).optional(),
   birthday: z.string().min(1, "Birthday is required"),
-  specialization: z.string().min(1, "Specialization is required"),
+  specialization: z.array(z.string()).min(1, "At least one specialization is required"),
   contactNumber: z
     .string()
     .min(10, "Contact number must be at least 10 digits")

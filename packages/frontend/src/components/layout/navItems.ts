@@ -56,6 +56,7 @@ export function getNavItems(role: string): NavItem[] {
         { to: "/admin/data-entry", icon: Settings, label: "Data Entry" },
         { to: "/admin/special-request", icon: Wrench, label: "Special Requests" },
         { to: "/admin/logs", icon: History, label: "Logs" },
+        { to: "/admin/profile", icon: User, label: "Profile" },
       ];
     case "superadmin":
       return [
@@ -72,6 +73,7 @@ export function getNavItems(role: string): NavItem[] {
         { to: "/admin/users",                icon: Users,           label: "Users" },
         { to: "/admin/workers",              icon: Wrench,          label: "Workers" },
         { to: "/admin/logs",                 icon: History,         label: "Logs" },
+        { to: "/admin/profile",              icon: User,            label: "Profile" },
       ];
     default:
       return [];

@@ -1,4 +1,5 @@
 import { db } from "../config/firebase";
+import { FieldValue } from "firebase-admin/firestore";
 import {
   MAX_CREDIT_POINTS,
   MIN_CREDIT_POINTS,
@@ -38,6 +39,9 @@ export async function deductCredits(
   if (suspended) {
     updateData.accountStatus = "suspended";
     updateData.isActive = false;
+    updateData.suspendReason = `Automatic suspension: credit points dropped to ${newBalance}`;
+    updateData.suspendedAt = new Date();
+    updateData.suspendUntil = null;
     if (userData.workerData) {
       updateData["workerData.isAvailable"] = false;
     }
@@ -88,6 +92,9 @@ export async function restoreCredits(
   ) {
     updateData.accountStatus = "active";
     updateData.isActive = true;
+    updateData.suspendReason = FieldValue.delete();
+    updateData.suspendedAt = FieldValue.delete();
+    updateData.suspendUntil = FieldValue.delete();
   }
 
   await userRef.update(updateData);

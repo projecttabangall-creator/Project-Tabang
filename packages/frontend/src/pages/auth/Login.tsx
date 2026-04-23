@@ -15,6 +15,7 @@ export function Login() {
   const { signIn } = useAuth();
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
+  const [notFound, setNotFound] = useState(false);
 
   const {
     register,
@@ -24,19 +25,22 @@ export function Login() {
 
   async function onSubmit(data: LoginForm) {
     setIsLoading(true);
+    setNotFound(false);
     try {
       await signIn(data.contactNumber, data.password);
       toast.success("Logged in successfully");
       // AuthContext will detect the user and redirect via ProtectedRoute
       navigate("/");
     } catch (error: any) {
-      const message =
-        error.code === "auth/invalid-credential"
-          ? "Invalid contact number or password"
-          : error.code === "auth/too-many-requests"
+      if (error.code === "auth/invalid-credential") {
+        setNotFound(true);
+      } else {
+        const message =
+          error.code === "auth/too-many-requests"
             ? "Too many attempts. Please try again later."
             : "Login failed. Please try again.";
-      toast.error(message);
+        toast.error(message);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -107,6 +111,27 @@ export function Login() {
             <button type="submit" disabled={isLoading} className="btn-primary w-full">
               {isLoading ? "Signing in..." : "Sign In"}
             </button>
+
+            {notFound && (
+              <div className="mt-4 rounded-lg bg-red-50 border border-red-200 p-4 text-center">
+                <p className="text-sm font-medium text-red-700">
+                  No account found for that contact number.
+                </p>
+                <p className="text-sm text-red-600 mt-1">
+                  Please check the number or{" "}
+                  <Link to="/register" className="font-semibold underline">
+                    create a new account
+                  </Link>
+                  .
+                </p>
+                <Link
+                  to="/"
+                  className="mt-3 inline-block rounded-lg border border-red-300 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-100"
+                >
+                  Back to Landing Page
+                </Link>
+              </div>
+            )}
           </form>
 
           <div className="mt-4 text-center text-sm">
