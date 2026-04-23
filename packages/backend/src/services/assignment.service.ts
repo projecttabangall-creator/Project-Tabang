@@ -36,6 +36,7 @@ interface RequestSchedule {
   date: string; // ISO date string
   startTime: string;
   endTime: string;
+  noSpecifiedTime?: boolean;
 }
 
 export interface AssignmentResult {
@@ -61,11 +62,24 @@ function checkAvailability(
 ): boolean {
   if (!availability || availability.length === 0) return false;
 
-  const MIN_OVERLAP_MINUTES = 90; // 1 hour 30 minutes
-
   const [year, month, day] = schedule.date.split("-").map(Number);
   const requestDate = new Date(year, month - 1, day); // local time — avoids UTC midnight shifting day in PH timezone
   const dayOfWeek = requestDate.getDay();
+
+  // "No specified time" — match any slot on the right day/date, ignore time overlap
+  if (schedule.noSpecifiedTime) {
+    return availability.some((slot) => {
+      const slotType = slot.type || "recurring";
+      if (slotType === "recurring") {
+        return slot.dayOfWeek === dayOfWeek;
+      } else if (slotType === "specific") {
+        return slot.date === schedule.date;
+      }
+      return false;
+    });
+  }
+
+  const MIN_OVERLAP_MINUTES = 90; // 1 hour 30 minutes
 
   const reqStart = timeToMinutes(schedule.startTime);
   const reqEnd = timeToMinutes(schedule.endTime);

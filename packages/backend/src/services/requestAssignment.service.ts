@@ -12,6 +12,7 @@ interface NormalizedSchedule {
   date: string;
   startTime: string;
   endTime: string;
+  noSpecifiedTime?: boolean;
 }
 
 function readCoordinate(value: any, primaryKey: string, fallbackKey: string): number | null {
@@ -58,10 +59,17 @@ function normalizeDate(dateValue: any): string | null {
 
 function normalizeSchedule(schedule: any): NormalizedSchedule | null {
   const date = normalizeDate(schedule?.date);
+  if (!date) return null;
+
   const startTime = typeof schedule?.startTime === "string" ? schedule.startTime : null;
   const endTime = typeof schedule?.endTime === "string" ? schedule.endTime : null;
 
-  if (!date || !startTime || !endTime) {
+  // "No specified time" — both are intentionally empty
+  if (startTime === "" && endTime === "") {
+    return { date, startTime: "", endTime: "", noSpecifiedTime: true };
+  }
+
+  if (!startTime || !endTime) {
     return null;
   }
 
