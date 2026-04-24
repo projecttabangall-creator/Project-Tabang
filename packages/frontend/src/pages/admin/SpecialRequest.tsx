@@ -302,6 +302,7 @@ export function SpecialRequest() {
             <input
               className="input-field"
               placeholder="09XX-XXX-XXXX"
+              maxLength={13}
               onKeyDown={(e) => { if (e.key.length === 1 && !/[\d+]/.test(e.key)) e.preventDefault(); }}
               onPaste={(e) => { if (!/^[\d+]*$/.test(e.clipboardData.getData("text"))) e.preventDefault(); }}
               {...register("beneficiaryContact", {
