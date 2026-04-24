@@ -145,8 +145,14 @@ async function uploadEvidenceFiles(
         const filename = `disputes/${requestId}/evidence/${Date.now()}_${i}.${ext}`;
 
         const file = bucket.file(filename);
-        await file.save(Buffer.from(base64String, "base64"), {
-          contentType: mimeType,
+        const buffer = Buffer.from(base64String, "base64");
+
+        // Upload using write stream for reliability
+        await new Promise<void>((resolve, reject) => {
+          const writeStream = file.createWriteStream({ contentType: mimeType });
+          writeStream.on("finish", () => resolve());
+          writeStream.on("error", reject);
+          writeStream.end(buffer);
         });
 
         // Make file publicly readable
