@@ -27,7 +27,7 @@ interface Request {
   totalForResident: number;
   tipAmount?: number;
   location: any;
-  schedule: { date: any; startTime: string; endTime: string };
+  schedule: { date: any; startTime: string; endTime: string; numberOfDays?: number };
   status: string;
   workerName?: string;
   workerPhone?: string;
@@ -301,6 +301,12 @@ export function RequestDetail() {
               {request.schedule.startTime ? `${request.schedule.startTime} - ${request.schedule.endTime}` : "No specified time"}
             </span>
           </p>
+          {request.schedule.numberOfDays && (
+            <p>
+              <span className="text-slate-600">Duration:</span>{" "}
+              <span className="font-medium">{request.schedule.numberOfDays} day(s)</span>
+            </p>
+          )}
         </div>
       </div>
 

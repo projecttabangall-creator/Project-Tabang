@@ -542,6 +542,70 @@ export async function rejectRequest(
 }
 
 /**
+ * PATCH /api/requests/:id/worker-cancel
+ * Worker cancels after accepting or arriving — returns request to pending queue
+ */
+export async function workerCancelRequest(
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> {
+  const requestId = req.params.id as string;
+  const workerId = req.user!.uid;
+
+  try {
+    const docRef = requestsRef.doc(requestId);
+    const doc = await docRef.get();
+
+    if (!doc.exists) {
+      res.status(404).json({ error: "Request not found" });
+      return;
+    }
+
+    const data = doc.data()!;
+
+    if (data.assignedWorkerId !== workerId) {
+      res.status(403).json({ error: "Not assigned to you" });
+      return;
+    }
+
+    const cancellableStatuses = [REQUEST_STATUSES.ACCEPTED, REQUEST_STATUSES.WORKER_ARRIVED];
+    if (!cancellableStatuses.includes(data.status)) {
+      res.status(400).json({ error: "Cannot cancel at this stage" });
+      return;
+    }
+
+    const now = FieldValue.serverTimestamp();
+
+    await docRef.update({
+      status: REQUEST_STATUSES.PENDING,
+      assignedWorkerId: null,
+      assignedWorkerName: null,
+      assignmentScore: null,
+      excludedWorkerIds: FieldValue.arrayUnion(workerId),
+      updatedAt: now,
+    });
+
+    await usersRef.doc(workerId).update({
+      "workerData.cancellationCount": FieldValue.increment(1),
+      updatedAt: now,
+    });
+
+    await db.collection("systemLogs").add({
+      action: "worker_cancelled_job",
+      performedBy: workerId,
+      targetRequestId: requestId,
+      details: `Worker cancelled after reaching status: ${data.status}`,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+
+    res.json({ message: "Job cancelled. Request returned to pending." });
+  } catch (error) {
+    console.error("Worker cancel error:", error);
+    res.status(500).json({ error: "Failed to cancel job" });
+  }
+}
+
+/**
  * PATCH /api/requests/:id/arrived
  * Worker marks arrival at location
  */
@@ -598,7 +662,7 @@ export async function setFinalPrice(
 ): Promise<void> {
   const requestId = req.params.id as string;
   const workerId = req.user!.uid;
-  const { finalPrice, priceChangeReason } = req.body;
+  const { finalPrice, priceChangeReason, finalSchedule } = req.body;
 
   try {
     const docRef = requestsRef.doc(requestId);
@@ -652,6 +716,14 @@ export async function setFinalPrice(
     );
     const now = FieldValue.serverTimestamp();
 
+    const scheduleUpdate = finalSchedule
+      ? {
+          "schedule.startTime": finalSchedule.startTime,
+          "schedule.endTime": finalSchedule.endTime,
+          "schedule.numberOfDays": finalSchedule.numberOfDays,
+        }
+      : {};
+
     if (requiresApproval) {
       await docRef.update({
         pendingFinalPrice: finalPrice,
@@ -666,6 +738,7 @@ export async function setFinalPrice(
         priceOverrideReviewedAt: null,
         priceOverrideReviewedBy: null,
         priceOverrideRejectedReason: null,
+        ...scheduleUpdate,
         updatedAt: now,
       });
 
@@ -698,6 +771,7 @@ export async function setFinalPrice(
       priceOverrideReviewedAt: null,
       priceOverrideReviewedBy: null,
       priceOverrideRejectedReason: null,
+      ...scheduleUpdate,
       status: REQUEST_STATUSES.IN_PROGRESS,
       priceConfirmedAt: now,
       updatedAt: now,

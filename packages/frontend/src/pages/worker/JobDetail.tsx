@@ -31,7 +31,7 @@ interface Request {
   tipAmount?: number;
   priceChangeReason?: string;
   location: any;
-  schedule: { date: any; startTime: string; endTime: string };
+  schedule: { date: any; startTime: string; endTime: string; numberOfDays?: number };
   status: string;
   residentName: string;
   residentPhone: string;
@@ -89,6 +89,13 @@ export function JobDetail() {
   const [finalPrice, setFinalPrice] = useState("");
   const [priceChangeReason, setPriceChangeReason] = useState("");
   const [showPriceForm, setShowPriceForm] = useState(false);
+  const [showSummary, setShowSummary] = useState(false);
+  const [capacityConfirmed, setCapacityConfirmed] = useState(false);
+  const [numDays, setNumDays] = useState("1");
+  const [scheduleStart, setScheduleStart] = useState("08:00");
+  const [scheduleEnd, setScheduleEnd] = useState("17:00");
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [cancelSubmitting, setCancelSubmitting] = useState(false);
   const [workerLocation, setWorkerLocation] = useState<[number, number] | null>(null);
   const [routeCoords, setRouteCoords] = useState<[number, number][]>([]);
   const [routeInfo, setRouteInfo] = useState<{ distance: number; duration: number } | null>(null);
@@ -210,12 +217,22 @@ export function JobDetail() {
     }
   };
 
-  const handleSetFinalPrice = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!request) {
-      return;
+  const handleWorkerCancel = async () => {
+    setCancelSubmitting(true);
+    try {
+      await api.patch(`/api/requests/${jobId}/worker-cancel`);
+      toast.success("Job cancelled. Request returned to queue.");
+      navigate("/worker/home");
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || "Failed to cancel job");
+    } finally {
+      setCancelSubmitting(false);
+      setShowCancelConfirm(false);
     }
+  };
+
+  const submitFinalPrice = async () => {
+    if (!request) return;
 
     const numericFinalPrice = Number(finalPrice);
     if (!numericFinalPrice || numericFinalPrice <= 0) {
@@ -233,6 +250,11 @@ export function JobDetail() {
       const { data } = await api.patch(`/api/requests/${jobId}/final-price`, {
         finalPrice: numericFinalPrice,
         priceChangeReason: priceChangeReason.trim(),
+        finalSchedule: {
+          numberOfDays: Number(numDays),
+          startTime: scheduleStart,
+          endTime: scheduleEnd,
+        },
       });
 
       if (data.requiresAdminApproval) {
@@ -243,11 +265,27 @@ export function JobDetail() {
 
       await fetchRequest();
       setShowPriceForm(false);
+      setShowSummary(false);
+      setCapacityConfirmed(false);
     } catch (error: any) {
       toast.error(error.response?.data?.error || "Failed to set final price");
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleSetFinalPrice = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const numericFinalPrice = Number(finalPrice);
+    if (!numericFinalPrice || numericFinalPrice <= 0) {
+      toast.error("Please enter a valid price");
+      return;
+    }
+    if (numericFinalPrice !== request!.suggestedPrice && !priceChangeReason.trim()) {
+      toast.error("Please explain why the final price changed");
+      return;
+    }
+    setShowSummary(true);
   };
 
   const handleComplete = async () => {
@@ -550,7 +588,7 @@ export function JobDetail() {
                 <label className="label">Final Price (PHP)</label>
                 <input
                   type="number"
-                  min={request.minPrice}
+                  min="1"
                   step="50"
                   placeholder="Enter agreed price"
                   value={finalPrice}
@@ -558,8 +596,7 @@ export function JobDetail() {
                   className="input-field"
                 />
                 <p className="text-xs text-slate-500 mt-1">
-                  Must be at least PHP {request.minPrice}. Above PHP{" "}
-                  {request.suggestedPrice * 2} will be sent for admin approval.
+                  Any positive amount. Above PHP {request.suggestedPrice * 2} will be sent for admin approval.
                 </p>
               </div>
 
@@ -569,37 +606,54 @@ export function JobDetail() {
                   placeholder="Explain why the final price differs from the suggested price."
                   value={priceChangeReason}
                   onChange={(e) => setPriceChangeReason(e.target.value)}
-                  className="input-field h-24"
+                  className="input-field h-20"
                 />
                 <p className="text-xs text-slate-500 mt-1">
                   Required when the final price changes from the suggested price.
                 </p>
               </div>
 
-              {numericFinalPrice > 0 && (
-                <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
-                  <div className="flex justify-between">
-                    <span>Worker Price</span>
-                    <span className="font-medium">PHP {numericFinalPrice}</span>
+              <div className="border-t border-slate-100 pt-3 space-y-3">
+                <p className="text-sm font-medium text-slate-700">Final Schedule</p>
+                <div>
+                  <label className="label">Number of Working Days</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={numDays}
+                    onChange={(e) => setNumDays(e.target.value)}
+                    className="input-field"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="label">Start Time</label>
+                    <input
+                      type="time"
+                      value={scheduleStart}
+                      onChange={(e) => setScheduleStart(e.target.value)}
+                      className="input-field"
+                    />
                   </div>
-                  <div className="flex justify-between mt-1">
-                    <span>Barangay Fee ({previewCommissionPercent}%)</span>
-                    <span className="font-medium">PHP {previewCommission}</span>
-                  </div>
-                  <div className="flex justify-between mt-2 pt-2 border-t border-slate-200 font-semibold">
-                    <span>Total Resident Pays</span>
-                    <span>PHP {previewTotal}</span>
+                  <div>
+                    <label className="label">End Time</label>
+                    <input
+                      type="time"
+                      value={scheduleEnd}
+                      onChange={(e) => setScheduleEnd(e.target.value)}
+                      className="input-field"
+                    />
                   </div>
                 </div>
-              )}
+              </div>
 
               <div className="flex gap-2">
                 <button
                   type="submit"
-                  disabled={isSubmitting}
+                  disabled={!finalPrice || Number(finalPrice) <= 0}
                   className="btn-primary flex-1"
                 >
-                  {isSubmitting ? "Saving..." : "Confirm Price"}
+                  Review & Confirm
                 </button>
                 <button
                   type="button"
@@ -610,12 +664,21 @@ export function JobDetail() {
                   }}
                   className="btn-secondary flex-1"
                 >
-                  Cancel
+                  Back
                 </button>
               </div>
             </form>
           )}
         </div>
+      )}
+
+      {request.status === "worker_arrived" && !request.priceOverrideRequired && (
+        <button
+          onClick={() => setShowCancelConfirm(true)}
+          className="w-full py-3 border border-red-300 text-red-600 font-medium rounded-lg hover:bg-red-50 transition-colors"
+        >
+          Cancel Job
+        </button>
       )}
 
       <div className="card space-y-3">
@@ -641,13 +704,21 @@ export function JobDetail() {
         )}
 
         {request.status === "accepted" && (
-          <button
-            onClick={handleMarkArrived}
-            disabled={isSubmitting}
-            className="btn-primary w-full"
-          >
-            {isSubmitting ? "Marking..." : "Mark as Arrived"}
-          </button>
+          <div className="space-y-2">
+            <button
+              onClick={handleMarkArrived}
+              disabled={isSubmitting}
+              className="btn-primary w-full"
+            >
+              {isSubmitting ? "Marking..." : "Mark as Arrived"}
+            </button>
+            <button
+              onClick={() => setShowCancelConfirm(true)}
+              className="w-full py-3 border border-red-300 text-red-600 font-medium rounded-lg hover:bg-red-50 transition-colors"
+            >
+              Cancel Job
+            </button>
+          </div>
         )}
 
         {["in_progress", "price_confirmed"].includes(request.status) && (
@@ -688,6 +759,105 @@ export function JobDetail() {
           <AlertTriangle size={18} />
           File a Dispute
         </Link>
+      )}
+
+      {/* Cancel Job Confirmation Modal */}
+      {showCancelConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-sm w-full p-6 space-y-4">
+            <h3 className="font-bold text-red-600 text-lg">Cancel This Job?</h3>
+            <p className="text-sm text-slate-700">
+              The request will return to the queue and a different worker will be assigned.
+              This cancellation will be recorded on your profile.
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={handleWorkerCancel}
+                disabled={cancelSubmitting}
+                className="flex-1 py-2 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg transition-colors disabled:opacity-60"
+              >
+                {cancelSubmitting ? "Cancelling..." : "Yes, Cancel Job"}
+              </button>
+              <button
+                onClick={() => setShowCancelConfirm(false)}
+                disabled={cancelSubmitting}
+                className="flex-1 py-2 border border-slate-200 text-slate-700 font-medium rounded-lg hover:bg-slate-50 transition-colors"
+              >
+                Go Back
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Final Summary / Confirmation Modal */}
+      {showSummary && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-sm w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+            <h3 className="font-bold text-slate-800 text-lg">Review & Confirm</h3>
+
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm space-y-1">
+              <p className="font-semibold text-slate-700 mb-2">Price Breakdown</p>
+              <div className="flex justify-between">
+                <span className="text-slate-600">Worker Price</span>
+                <span className="font-medium">PHP {numericFinalPrice}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-600">Barangay Fee ({previewCommissionPercent}%)</span>
+                <span className="font-medium">PHP {previewCommission}</span>
+              </div>
+              <div className="flex justify-between pt-2 border-t border-slate-200 font-semibold">
+                <span>Total Resident Pays</span>
+                <span>PHP {previewTotal}</span>
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm space-y-1">
+              <p className="font-semibold text-slate-700 mb-2">Final Schedule</p>
+              <div className="flex justify-between">
+                <span className="text-slate-600">Date</span>
+                <span className="font-medium">{formatDate(request.schedule.date)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-600">Time</span>
+                <span className="font-medium">{scheduleStart} – {scheduleEnd}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-600">Duration</span>
+                <span className="font-medium">{numDays} day(s)</span>
+              </div>
+            </div>
+
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={capacityConfirmed}
+                onChange={(e) => setCapacityConfirmed(e.target.checked)}
+                className="mt-0.5 h-4 w-4 accent-primary-600 shrink-0"
+              />
+              <span className="text-sm text-slate-700">
+                I confirm I have the necessary skills, equipment, and materials to complete this job.
+              </span>
+            </label>
+
+            <div className="flex gap-2">
+              <button
+                onClick={submitFinalPrice}
+                disabled={!capacityConfirmed || isSubmitting}
+                className="flex-1 py-2 bg-primary-600 hover:bg-primary-700 text-white font-semibold rounded-lg transition-colors disabled:opacity-50"
+              >
+                {isSubmitting ? "Confirming..." : "Confirm"}
+              </button>
+              <button
+                onClick={() => { setShowSummary(false); setCapacityConfirmed(false); }}
+                disabled={isSubmitting}
+                className="flex-1 py-2 border border-slate-200 text-slate-700 font-medium rounded-lg hover:bg-slate-50 transition-colors"
+              >
+                Go Back
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

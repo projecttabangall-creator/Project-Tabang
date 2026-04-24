@@ -23,6 +23,7 @@ import {
   rejectRequest,
   setFinalPrice,
   updateSchedule,
+  workerCancelRequest,
 } from "../controllers/request.controller";
 
 export const requestRouter = Router();
@@ -56,6 +57,8 @@ requestRouter.patch(
 );
 
 requestRouter.patch("/:id/complete", roleGuard("worker"), completeRequest);
+
+requestRouter.patch("/:id/worker-cancel", roleGuard("worker"), workerCancelRequest);
 
 requestRouter.patch(
   "/:id/cancel",

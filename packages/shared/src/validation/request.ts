@@ -38,6 +38,11 @@ export const specialRequestSchema = createRequestSchema.extend({
 export const setFinalPriceSchema = z.object({
   finalPrice: z.number().positive("Final price must be positive"),
   priceChangeReason: z.string().optional(),
+  finalSchedule: z.object({
+    numberOfDays: z.number().int().min(1, "At least 1 day required"),
+    startTime: z.string().regex(/^\d{2}:\d{2}$/, "Use HH:MM format"),
+    endTime: z.string().regex(/^\d{2}:\d{2}$/, "Use HH:MM format"),
+  }).optional(),
 });
 
 export const approvePriceOverrideSchema = z.object({

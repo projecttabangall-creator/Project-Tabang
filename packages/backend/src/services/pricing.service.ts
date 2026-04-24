@@ -53,18 +53,10 @@ export async function getCommissionPercent(): Promise<number> {
  */
 export function validateFinalPrice(
   suggestedPrice: number,
-  minPrice: number,
+  _minPrice: number,
   finalPrice: number
 ): { isValid: boolean; requiresApproval: boolean; error?: string } {
   const maxAllowed = suggestedPrice * MAX_PRICE_MULTIPLIER;
-
-  if (finalPrice < minPrice) {
-    return {
-      isValid: false,
-      requiresApproval: false,
-      error: `Final price must be at least the minimum price of PHP ${minPrice}`,
-    };
-  }
 
   if (finalPrice > maxAllowed) {
     return {
