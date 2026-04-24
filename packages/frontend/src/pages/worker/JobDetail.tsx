@@ -589,7 +589,6 @@ export function JobDetail() {
                 <input
                   type="number"
                   min="1"
-                  step="50"
                   placeholder="Enter agreed price"
                   value={finalPrice}
                   onChange={(e) => setFinalPrice(e.target.value)}
