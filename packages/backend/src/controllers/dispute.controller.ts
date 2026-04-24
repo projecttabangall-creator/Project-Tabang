@@ -203,13 +203,15 @@ export async function fileDispute(
       return;
     }
 
-    const existingDispute = await disputesRef
+    const existingDisputeSnap = await disputesRef
       .where("requestId", "==", body.requestId)
-      .where("status", "!=", DISPUTE_STATUSES.RESOLVED)
-      .limit(1)
       .get();
 
-    if (!existingDispute.empty) {
+    const hasOpenDispute = existingDisputeSnap.docs.some(
+      (doc) => doc.data().status !== DISPUTE_STATUSES.RESOLVED
+    );
+
+    if (hasOpenDispute) {
       res.status(400).json({ error: "A dispute is already open for this request" });
       return;
     }
