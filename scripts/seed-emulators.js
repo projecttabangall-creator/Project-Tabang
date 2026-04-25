@@ -4,7 +4,15 @@
  *
  * Usage:
  *   1. Start emulators: npx firebase emulators:start
- *   2. In another terminal: npm run seed
+ *   2. (Optional) Set passwords via env vars:
+ *        EMU_SUPERADMIN_PASSWORD, EMU_DEMO_PASSWORD
+ *      Otherwise defaults below are used (emulator-only, not for production).
+ *   3. In another terminal: npm run seed
+ *
+ * SECURITY: These passwords only work against the LOCAL emulator
+ * (FIREBASE_AUTH_EMULATOR_HOST is forced below). They are NOT the
+ * production passwords — production credentials live in scripts/.env.seed
+ * (gitignored) and are read by scripts/seed-production.js.
  */
 
 const admin = require("firebase-admin");
@@ -19,15 +27,19 @@ admin.initializeApp({ projectId: "project-tabang---claude-code" });
 const auth = admin.auth();
 const db = admin.firestore();
 
+const SUPERADMIN_PASSWORD =
+  process.env.EMU_SUPERADMIN_PASSWORD || "EmulatorOnly!Super1";
+const DEMO_PASSWORD = process.env.EMU_DEMO_PASSWORD || "EmulatorOnly!Demo1";
+
 const DEMO_ACCOUNTS = [
   {
     contactNumber: "09001234567",
-    password: "Pr0jectTab4ng333",
+    password: SUPERADMIN_PASSWORD,
     firstName: "Super",
     lastName: "Admin",
     role: "superadmin",
     birthday: "1990-01-01",
-    email: "projecttabangall@gmail.com",
+    email: "demo-superadmin@example.local",
     address: {
       street: "Tabang HQ",
       houseLot: "1",
@@ -37,7 +49,7 @@ const DEMO_ACCOUNTS = [
   },
   {
     contactNumber: "09171234567",
-    password: "Password123",
+    password: DEMO_PASSWORD,
     firstName: "Juan",
     lastName: "Dela Cruz",
     role: "resident",
@@ -51,7 +63,7 @@ const DEMO_ACCOUNTS = [
   },
   {
     contactNumber: "09281234567",
-    password: "Password123",
+    password: DEMO_PASSWORD,
     firstName: "Maria",
     lastName: "Santos",
     role: "worker",
@@ -86,7 +98,7 @@ const DEMO_ACCOUNTS = [
   },
   {
     contactNumber: "09391234567",
-    password: "Password123",
+    password: DEMO_PASSWORD,
     firstName: "Pedro",
     lastName: "Admin",
     role: "admin",

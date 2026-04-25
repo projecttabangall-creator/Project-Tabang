@@ -1,15 +1,15 @@
-# Raspberry Pi — Git Commands Reference
+# Raspberry Pi Git Commands Reference
 
 ## First-Time Setup (only once)
 
 ```bash
 # Clone the repository
-git clone https://github.com/projecttabangall-creator/Project-Tabang.git ~/project-tabang
+git clone https://github.com/<your-org>/<your-repo>.git ~/project-tabang
 cd ~/project-tabang
 
 # Set your git identity
-git config --global user.name "Project Tabang"
-git config --global user.email "projecttabangall@gmail.com"
+git config --global user.name "<your-name>"
+git config --global user.email "<your-email@example.com>"
 
 # Save credentials so you don't re-enter them every time
 git config --global credential.helper store
@@ -53,19 +53,19 @@ sudo systemctl restart tabang-emulators tabang-fingerprint tabang-frontend
 
 **Uncommitted local changes blocking the pull:**
 ```bash
-git stash           # temporarily shelve local changes
+git stash
 git pull origin main
-git stash pop       # re-apply your changes (if needed)
+git stash pop
 ```
 
-**Or discard local changes entirely (careful — this is permanent):**
+**Or discard local changes entirely (careful: this is permanent):**
 ```bash
 git reset --hard origin/main
 ```
 
 **Merge conflict:**
 ```bash
-git status          # see which files are conflicted
+git status
 # Edit conflicted files, look for <<<<<<< markers
 git add .
 git commit -m "Resolve merge conflicts"
@@ -75,8 +75,8 @@ git commit -m "Resolve merge conflicts"
 
 ## Credentials
 
-- **GitHub username:** `projecttabangall-creator`
+- **GitHub username:** your GitHub account or org member account
 - **Password:** use a Personal Access Token (not your GitHub password)
-- **Repo URL:** `https://github.com/projecttabangall-creator/Project-Tabang.git`
+- **Repo URL:** `https://github.com/<your-org>/<your-repo>.git`
 
-After running `git config --global credential.helper store`, your credentials are saved after the first successful pull — you won't be asked again.
+After running `git config --global credential.helper store`, your credentials are saved after the first successful pull, so you should not be asked again.

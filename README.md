@@ -7,7 +7,7 @@ A community-driven, role-based worker/service booking platform for Barangay (Phi
 - **Frontend:** React 18 + Vite + TypeScript + TailwindCSS + shadcn/ui
 - **Backend:** Express.js on Firebase Cloud Functions
 - **Database:** Firebase Firestore
-- **Auth:** Firebase Authentication (Phone Auth emulator)
+- **Auth:** Firebase Authentication
 - **Maps:** Leaflet + OpenStreetMap
 - **Monorepo:** npm workspaces (shared, backend, frontend)
 
@@ -15,7 +15,7 @@ A community-driven, role-based worker/service booking platform for Barangay (Phi
 
 ### Prerequisites
 
-- Node.js 18+
+- Node.js 22+
 - Java JDK 21+ (for Firebase emulators)
 - Firebase CLI: `npm install -g firebase-tools`
 
@@ -32,7 +32,8 @@ A community-driven, role-based worker/service booking platform for Barangay (Phi
 
 3. **Start emulators (Terminal 1):**
    ```bash
-   npx firebase emulators:start
+   npx firebase emulators:start --import ./emulator-data --export-on-exit ./emulator-data
+
    ```
 
 4. **Seed demo accounts (Terminal 2):**
@@ -54,24 +55,28 @@ A community-driven, role-based worker/service booking platform for Barangay (Phi
 
 Since the emulators auto-accept Firebase Auth registrations, you can create accounts on the fly. However, here are recommended test credentials:
 
+> Passwords below are placeholders. The actual values come from `scripts/.env.seed`
+> (production seed) or the `EMU_SUPERADMIN_PASSWORD` / `EMU_DEMO_PASSWORD` env
+> vars (emulator seed). NEVER commit real passwords here.
+
 ### Resident Demo Account
-- **Contact Number:** `09171234567`
-- **Password:** `Password123`
-- **Name:** Juan Dela Cruz
+- **Contact Number:** `09XXXXXXXXX`
+- **Password:** `<set in scripts/.env.seed or EMU_DEMO_PASSWORD>`
+- **Name:** Sample Resident
 - **Role:** Resident (submits service requests, pays workers)
 
 ### Worker Demo Account
-- **Contact Number:** `09281234567`
-- **Password:** `Password123`
-- **Name:** Maria Santos
+- **Contact Number:** `09XXXXXXXXX`
+- **Password:** `<set in scripts/.env.seed or EMU_DEMO_PASSWORD>`
+- **Name:** Sample Worker
 - **Specialization:** Plumbing
 - **Role:** Worker (receives auto-assigned jobs, completes work)
 - **Note:** Must be registered by Admin first, then verified
 
 ### Admin Demo Account
-- **Contact Number:** `09391234567`
-- **Password:** `Password123`
-- **Name:** Pedro Admin
+- **Contact Number:** `09XXXXXXXXX`
+- **Password:** `<set in scripts/.env.seed or EMU_DEMO_PASSWORD>`
+- **Name:** Sample Admin
 - **Role:** Admin (manages categories, workers, payments, disputes)
 
 ### How to Create Demo Accounts
@@ -79,9 +84,8 @@ Since the emulators auto-accept Firebase Auth registrations, you can create acco
 **Resident (self-register):**
 1. Click **"Register"** on the login page
 2. Enter the demo credentials above
-3. You'll receive a 6-digit OTP in the console (check browser dev tools or terminal)
-4. Enter the OTP on the verification page
-5. Login with your contact number and password
+3. Submit the registration form
+4. Login with your contact number and password
 
 **Worker (admin-only):**
 1. Login as Admin first
@@ -99,9 +103,9 @@ Since the emulators auto-accept Firebase Auth registrations, you can create acco
      ```json
      {
        "role": "admin",
-       "firstName": "Pedro",
+       "firstName": "Sample",
        "lastName": "Admin",
-       "contactNumber": "09391234567",
+       "contactNumber": "09XXXXXXXXX",
        "isVerified": true,
        "isActive": true,
        "accountStatus": "active",
@@ -172,7 +176,7 @@ npm run deploy                    # Deploy to Firebase
 
 ## Key Features (Phase 1 & 2 Complete)
 
-✅ **Authentication:** Registration, OTP verification, login with role-based routing
+✅ **Authentication:** Registration, login, password change, and role-based routing
 ✅ **Admin Panel:** Dashboard with stats, category management, worker registration, user management
 ✅ **Data Entry:** Add service categories and items with minimum prices
 ✅ **Firestore:** Complete data model with security rules and indexes
@@ -184,7 +188,7 @@ npm run deploy                    # Deploy to Firebase
 - Worker job acceptance/completion flow
 - Payment proof upload & verification
 - Dispute resolution system
-- Real-time notifications (push, SMS, email)
+- Real-time notifications
 - Offline mode (Raspberry Pi integration)
 
 ---

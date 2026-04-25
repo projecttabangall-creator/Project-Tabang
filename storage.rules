@@ -12,16 +12,24 @@ service firebase.storage {
 
     match /requests/{requestId}/photos/{fileName} {
       allow read: if isAuthenticated();
-      allow write: if isAuthenticated()
-                   && request.resource.size < 10 * 1024 * 1024
-                   && request.resource.contentType.matches('image/.*');
+      // Only the request's resident can upload photos; admins can overwrite/delete.
+      // Workers and other users cannot tamper with another request's evidence.
+      allow create: if isAuthenticated()
+                    && request.resource.size < 10 * 1024 * 1024
+                    && request.resource.contentType.matches('image/.*')
+                    && firestore.get(/databases/(default)/documents/serviceRequests/$(requestId)).data.residentId == request.auth.uid;
+      allow update, delete: if isAdmin();
     }
 
     match /payments/{paymentId}/proof/{fileName} {
       allow read: if isAuthenticated();
-      allow write: if isAuthenticated()
-                   && request.resource.size < 10 * 1024 * 1024
-                   && request.resource.contentType.matches('image/.*');
+      // Only the payment's resident can upload proof; admins can overwrite/delete.
+      // Prevents another user from forging or replacing payment evidence during dispute review.
+      allow create: if isAuthenticated()
+                    && request.resource.size < 10 * 1024 * 1024
+                    && request.resource.contentType.matches('image/.*')
+                    && firestore.get(/databases/(default)/documents/payments/$(paymentId)).data.residentId == request.auth.uid;
+      allow update, delete: if isAdmin();
     }
 
     match /workers/{workerId}/credentials/{allPaths=**} {

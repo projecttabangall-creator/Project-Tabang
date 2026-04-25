@@ -96,3 +96,41 @@
     @apply text-lg font-bold text-slate-800 font-display;
   }
 }
+
+/* Keep Leaflet maps contained within cards/sections and below app overlays. */
+.leaflet-container {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.leaflet-tile-pane {
+  z-index: 1;
+}
+
+.leaflet-overlay-pane {
+  z-index: 2;
+}
+
+.leaflet-shadow-pane {
+  z-index: 3;
+}
+
+.leaflet-marker-pane {
+  z-index: 4;
+}
+
+.leaflet-tooltip-pane {
+  z-index: 5;
+}
+
+.leaflet-popup-pane {
+  z-index: 6;
+}
+
+.leaflet-top,
+.leaflet-bottom {
+  z-index: 7;
+}

@@ -14,12 +14,12 @@ Create `~/project-tabang/packages/frontend/.env`:
 
 ```bash
 cat > ~/project-tabang/packages/frontend/.env <<'EOF'
-VITE_FIREBASE_API_KEY=AIzaSyDaJO7gYNrw5t8h_qliXLlWbUA_V4yIRT0
-VITE_FIREBASE_AUTH_DOMAIN=project-tabang---claude-code.firebaseapp.com
-VITE_FIREBASE_PROJECT_ID=project-tabang---claude-code
-VITE_FIREBASE_STORAGE_BUCKET=project-tabang---claude-code.firebasestorage.app
-VITE_FIREBASE_MESSAGING_SENDER_ID=140297914184
-VITE_FIREBASE_APP_ID=1:140297914184:web:292d48a65e4185c302d57d
+VITE_FIREBASE_API_KEY=your-firebase-web-api-key
+VITE_FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com
+VITE_FIREBASE_PROJECT_ID=your-project-id
+VITE_FIREBASE_STORAGE_BUCKET=your-project.firebasestorage.app
+VITE_FIREBASE_MESSAGING_SENDER_ID=your-messaging-sender-id
+VITE_FIREBASE_APP_ID=your-firebase-app-id
 VITE_USE_EMULATOR=true
 EOF
 ```
@@ -77,10 +77,11 @@ cd ~/project-tabang
 npm run seed
 ```
 
-This creates 3 test accounts:
-- **Admin**: Contact `09391234567` | Password `Password123`
-- **Worker**: Contact `09281234567` | Password `Password123`
-- **Resident**: Contact `09171234567` | Password `Password123`
+This creates 3 test accounts (passwords come from `EMU_DEMO_PASSWORD` env var,
+or the emulator-only default in `scripts/seed-emulators.js`):
+- **Admin**: Contact `09XXXXXXXXX`
+- **Worker**: Contact `09XXXXXXXXX`
+- **Resident**: Contact `09XXXXXXXXX`
 
 > **Only run once.** When you stop the emulators with `--export-on-exit`, all data is saved to `./emulator-data/`. The next time you start, it reloads automatically — no need to seed again.
 
@@ -155,7 +156,7 @@ serve -s packages/frontend/dist -l 3000
 - [ ] Terminal 4 (first time only): Run `npm run seed` to create test accounts
 - [ ] All three services show "started successfully" or equivalent
 - [ ] Access the app at `http://localhost:3000` on the Pi's Chromium browser
-- [ ] Log in with admin account: `09391234567` / `Password123`
+- [ ] Log in with the seeded admin account using the password you configured
 
 ---
 

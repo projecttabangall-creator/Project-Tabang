@@ -18,26 +18,35 @@ if (!admin.apps.length) {
 const db = admin.firestore();
 const auth = admin.auth();
 
+// Emulator-only credentials. Override via env vars to match your seeded data.
+// These passwords ONLY work against the local emulator (FIREBASE_AUTH_EMULATOR_HOST is set above).
+const SUPERADMIN_PASSWORD =
+  process.env.EMU_SUPERADMIN_PASSWORD || "EmulatorOnly!Super1";
+const DEMO_PASSWORD = process.env.EMU_DEMO_PASSWORD || "EmulatorOnly!Demo1";
+// New password value used by password-change/reset regression tests.
+const ROTATED_DEMO_PASSWORD =
+  process.env.EMU_ROTATED_PASSWORD || "EmulatorOnly!Rotated1";
+
 const ACCOUNTS = {
   superadmin: {
     contactNumber: "09001234567",
     email: "09001234567@tabang.local",
-    password: "Pr0jectTab4ng333",
+    password: SUPERADMIN_PASSWORD,
   },
   admin: {
     contactNumber: "09391234567",
     email: "09391234567@tabang.local",
-    password: "Password123",
+    password: DEMO_PASSWORD,
   },
   resident: {
     contactNumber: "09171234567",
     email: "09171234567@tabang.local",
-    password: "Password123",
+    password: DEMO_PASSWORD,
   },
   worker: {
     contactNumber: "09281234567",
     email: "09281234567@tabang.local",
-    password: "Password123",
+    password: DEMO_PASSWORD,
   },
 };
 
@@ -204,7 +213,7 @@ async function run() {
 
   const residentAuth = await signInWithAnyPassword(ACCOUNTS.resident.email, [
     ACCOUNTS.resident.password,
-    "Password123!",
+    ROTATED_DEMO_PASSWORD,
   ]);
   ACCOUNTS.resident.password = residentAuth.password;
 
@@ -308,16 +317,16 @@ async function run() {
   await apiFetch("/api/auth/change-password", {
     method: "POST",
     token: residentTempAuth.idToken,
-    body: { newPassword: "Password123!" },
+    body: { newPassword: ROTATED_DEMO_PASSWORD },
   });
 
   const residentAfterPasswordChange = await residentDoc.ref.get();
   assert.equal(Boolean(residentAfterPasswordChange.data().mustChangePassword), false);
   const residentAuthAfterPasswordChange = await signInWithPassword(
     ACCOUNTS.resident.email,
-    "Password123!"
+    ROTATED_DEMO_PASSWORD
   );
-  ACCOUNTS.resident.password = "Password123!";
+  ACCOUNTS.resident.password = ROTATED_DEMO_PASSWORD;
   log("PASS password reset approval and forced password change");
 
   const createdRequest = await apiFetch("/api/requests", {

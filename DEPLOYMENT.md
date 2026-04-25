@@ -6,7 +6,7 @@ This guide covers deploying Project Tabang to **Firebase** (production) and to a
 
 ## Prerequisites (Both Paths)
 
-- Node.js 18 or higher
+- Node.js 22 or higher
 - Firebase CLI: `npm install -g firebase-tools`
 - Git repository cloned locally
 
@@ -22,28 +22,28 @@ This publishes the frontend to Firebase Hosting and the backend as a Cloud Funct
 firebase login
 ```
 
-Sign in with the Google account that owns the Firebase project (`project-tabang---claude-code`).
+Sign in with the Google account that owns your Firebase project.
 
 ### Step 2: Set the Firebase project
 
 ```bash
-firebase use project-tabang---claude-code
+firebase use <your-firebase-project-id>
 ```
 
 If prompted to add the project, choose **Add** and select it from the list.
 
 ### Step 3: Set up the frontend `.env` file
 
-Create `packages/frontend/.env` with the production Firebase config:
+Create `packages/frontend/.env` with your production Firebase web app config:
 
 ```bash
 cat > packages/frontend/.env <<'EOF'
-VITE_FIREBASE_API_KEY=AIzaSyDaJO7gYNrw5t8h_qliXLlWbUA_V4yIRT0
-VITE_FIREBASE_AUTH_DOMAIN=project-tabang---claude-code.firebaseapp.com
-VITE_FIREBASE_PROJECT_ID=project-tabang---claude-code
-VITE_FIREBASE_STORAGE_BUCKET=project-tabang---claude-code.firebasestorage.app
-VITE_FIREBASE_MESSAGING_SENDER_ID=140297914184
-VITE_FIREBASE_APP_ID=1:140297914184:web:292d48a65e4185c302d57d
+VITE_FIREBASE_API_KEY=your-firebase-web-api-key
+VITE_FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com
+VITE_FIREBASE_PROJECT_ID=your-project-id
+VITE_FIREBASE_STORAGE_BUCKET=your-project.firebasestorage.app
+VITE_FIREBASE_MESSAGING_SENDER_ID=your-messaging-sender-id
+VITE_FIREBASE_APP_ID=your-firebase-app-id
 VITE_USE_EMULATOR=false
 EOF
 ```
@@ -73,8 +73,8 @@ This single command:
 ```
 ✔  Deploy complete!
 
-Project Console: https://console.firebase.google.com/project/project-tabang---claude-code
-Hosting URL: https://project-tabang---claude-code.web.app
+Project Console: https://console.firebase.google.com/project/<your-firebase-project-id>
+Hosting URL: https://<your-firebase-hosting-site>.web.app
 ```
 
 ### Step 6: Deploy Firestore indexes (first time only)
@@ -133,7 +133,7 @@ The first time you deploy to a fresh Firebase project, you may need to:
 
 ### Verify the deployment
 
-1. Open the Hosting URL (e.g. `https://project-tabang---claude-code.web.app`)
+1. Open the Hosting URL (e.g. `https://<your-firebase-hosting-site>.web.app`)
 2. Log in with an admin account
 3. Check the Admin Dashboard loads correctly
 4. Create a test service request to verify Firestore writes work

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
-import { Shield, Ban, UserCheck, Trash2 } from "lucide-react";
+import { Shield, Ban, UserCheck, Trash2, Search } from "lucide-react";
 import api from "@/services/api";
 import { BackButton } from "@/components/common/BackButton";
 import {
@@ -42,6 +42,7 @@ export function UserManagement() {
   const [resetRequests, setResetRequests] = useState<PasswordResetRequestItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [roleFilter, setRoleFilter] = useState<string>("all");
+  const [searchQuery, setSearchQuery] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogMode, setDialogMode] = useState<"suspend" | "ban" | "activate">(
     "suspend"
@@ -55,6 +56,23 @@ export function UserManagement() {
   const visibleResetRequests = resetRequests.filter(
     (request) => request.status === "pending" || Boolean(issuedPasswords[request.id])
   );
+  const normalizedSearchQuery = searchQuery.trim().toLowerCase();
+  const filteredUsers = users.filter((user) => {
+    if (!normalizedSearchQuery) return true;
+
+    const searchableText = [
+      user.firstName,
+      user.lastName,
+      `${user.firstName} ${user.lastName}`,
+      user.contactNumber,
+      user.email || "",
+      user.role,
+    ]
+      .join(" ")
+      .toLowerCase();
+
+    return searchableText.includes(normalizedSearchQuery);
+  });
 
   useEffect(() => {
     setLoading(true);
@@ -337,13 +355,35 @@ export function UserManagement() {
         ))}
       </div>
 
-      {users.length === 0 ? (
+      <div className="mb-4">
+        <label htmlFor="user-search" className="label">
+          Search Users
+        </label>
+        <div className="relative">
+          <Search
+            size={16}
+            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+          />
+          <input
+            id="user-search"
+            type="search"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder="Search by name, number, email, or role"
+            className="input-field pl-10"
+          />
+        </div>
+      </div>
+
+      {filteredUsers.length === 0 ? (
         <div className="card text-center py-12">
-          <p className="text-slate-500">No users found.</p>
+          <p className="text-slate-500">
+            {users.length === 0 ? "No users found." : "No users match your search."}
+          </p>
         </div>
       ) : (
         <div className="space-y-2">
-          {users.map((user) => (
+          {filteredUsers.map((user) => (
             <div
               key={user.id}
               className="card py-3 flex items-center justify-between"
