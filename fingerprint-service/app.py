@@ -16,6 +16,15 @@ API_BASE_URL = os.getenv("API_BASE_URL", "https://project-tabang---claude-code.w
 
 # Key: worker Firestore document ID, Value: fingerprint position index on sensor
 enrolled_workers = {}
+enrollment_status = {}
+
+
+def set_enrollment_status(worker_id, stage, message):
+    enrollment_status[worker_id] = {
+        "stage": stage,
+        "message": message,
+    }
+
 
 def get_sensor():
     try:
@@ -29,66 +38,134 @@ def get_sensor():
 
 @app.route("/fingerprint/enroll", methods=["POST"])
 def enroll():
-    data = request.json
+    data = request.json or {}
     worker_id = data.get("workerId")
     admin_token = data.get("adminToken")
 
     if not worker_id:
         return jsonify({"error": "workerId is required"}), 400
 
+    set_enrollment_status(
+        worker_id,
+        "starting",
+        "Preparing the fingerprint scanner.",
+    )
+
     try:
         fp = get_sensor()
     except Exception as e:
+        set_enrollment_status(worker_id, "error", str(e))
         return jsonify({"error": str(e)}), 503
 
-    # Scan 1
-    print(f"[ENROLL] Waiting for first scan (worker: {worker_id})...")
-    while not fp.readImage():
-        pass
-    fp.convertImage(0x01)
-
-    result = fp.searchTemplate()
-    if result[0] >= 0:
-        return jsonify({"error": "Fingerprint already enrolled"}), 409
-
-    # Scan 2
-    print("[ENROLL] Remove finger, then place same finger again...")
-    while fp.readImage():
-        pass
-    while not fp.readImage():
-        pass
-    fp.convertImage(0x02)
-
-    if fp.compareCharacteristics() == 0:
-        return jsonify({"error": "Fingerprints did not match. Try again."}), 400
-
-    fp.createTemplate()
-    position = fp.storeTemplate()
-    enrolled_workers[worker_id] = position
-    print(f"[ENROLL] Stored at position {position} for worker {worker_id}")
-
-    # Update backend
     try:
-        headers = {}
-        if admin_token:
-            headers["Authorization"] = f"Bearer {admin_token}"
-        resp = http_requests.patch(
-            f"{API_BASE_URL}/workers/{worker_id}/biometric",
-            json={"biometricEnrolled": True},
-            headers=headers,
-            timeout=10
+        set_enrollment_status(
+            worker_id,
+            "waiting_first_scan",
+            "Waiting for the first fingerprint scan.",
         )
-        if resp.status_code != 200:
-            print(f"[ENROLL] Warning: backend update returned {resp.status_code}")
-    except Exception as e:
-        print(f"[ENROLL] Warning: could not update backend — {e}")
+        print(f"[ENROLL] Waiting for first scan (worker: {worker_id})...")
+        while not fp.readImage():
+            pass
 
-    return jsonify({"success": True, "message": "Fingerprint enrolled successfully"}), 200
+        set_enrollment_status(
+            worker_id,
+            "first_scan_captured",
+            "First fingerprint captured. Remove the finger from the scanner.",
+        )
+        fp.convertImage(0x01)
+
+        result = fp.searchTemplate()
+        if result[0] >= 0:
+            set_enrollment_status(
+                worker_id,
+                "error",
+                "Fingerprint already enrolled on the sensor.",
+            )
+            return jsonify({"error": "Fingerprint already enrolled"}), 409
+
+        set_enrollment_status(
+            worker_id,
+            "waiting_finger_removal",
+            "Remove the finger, then place the same finger again.",
+        )
+        print("[ENROLL] Remove finger, then place same finger again...")
+        while fp.readImage():
+            pass
+
+        set_enrollment_status(
+            worker_id,
+            "waiting_second_scan",
+            "Waiting for the second fingerprint scan.",
+        )
+        while not fp.readImage():
+            pass
+
+        set_enrollment_status(
+            worker_id,
+            "second_scan_captured",
+            "Second fingerprint captured. Finalizing enrollment.",
+        )
+        fp.convertImage(0x02)
+
+        if fp.compareCharacteristics() == 0:
+            set_enrollment_status(
+                worker_id,
+                "error",
+                "The two scans did not match. Please try again.",
+            )
+            return jsonify({"error": "Fingerprints did not match. Try again."}), 400
+
+        fp.createTemplate()
+        position = fp.storeTemplate()
+        enrolled_workers[worker_id] = position
+        print(f"[ENROLL] Stored at position {position} for worker {worker_id}")
+
+        try:
+            headers = {}
+            if admin_token:
+                headers["Authorization"] = f"Bearer {admin_token}"
+
+            resp = http_requests.patch(
+                f"{API_BASE_URL}/workers/{worker_id}/biometric",
+                json={"biometricEnrolled": True},
+                headers=headers,
+                timeout=10,
+            )
+            if resp.status_code != 200:
+                print(f"[ENROLL] Warning: backend update returned {resp.status_code}")
+        except Exception as e:
+            print(f"[ENROLL] Warning: could not update backend - {e}")
+
+        set_enrollment_status(
+            worker_id,
+            "complete",
+            "Fingerprint enrolled successfully.",
+        )
+        return jsonify({"success": True, "message": "Fingerprint enrolled successfully"}), 200
+    except Exception as e:
+        set_enrollment_status(
+            worker_id,
+            "error",
+            f"Enrollment failed: {e}",
+        )
+        return jsonify({"error": f"Enrollment failed: {e}"}), 500
+
+
+@app.route("/fingerprint/enroll-status/<worker_id>", methods=["GET"])
+def enroll_status(worker_id):
+    status = enrollment_status.get(worker_id)
+    if not status:
+        return jsonify({
+            "stage": "idle",
+            "message": "No active enrollment.",
+        }), 200
+
+    return jsonify(status), 200
 
 
 @app.route("/fingerprint/verify", methods=["POST"])
 def verify():
-    data = request.json
+    data = request.json or {}
     worker_id = data.get("workerId")
 
     if not worker_id:

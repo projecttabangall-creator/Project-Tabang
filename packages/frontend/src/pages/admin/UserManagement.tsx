@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { Shield, Ban, UserCheck, Trash2, Search } from "lucide-react";
 import api from "@/services/api";
@@ -38,10 +39,14 @@ interface PasswordResetRequestItem {
 }
 
 export function UserManagement() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [users, setUsers] = useState<UserItem[]>([]);
   const [resetRequests, setResetRequests] = useState<PasswordResetRequestItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [roleFilter, setRoleFilter] = useState<string>("all");
+  const [roleFilter, setRoleFilter] = useState<string>(() => {
+    const role = searchParams.get("role");
+    return role === "resident" || role === "worker" || role === "admin" ? role : "all";
+  });
   const [searchQuery, setSearchQuery] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogMode, setDialogMode] = useState<"suspend" | "ban" | "activate">(
@@ -83,6 +88,17 @@ export function UserManagement() {
 
     fetchUsers().finally(() => clearTimeout(timeout));
   }, [roleFilter]);
+
+  useEffect(() => {
+    const nextRole = searchParams.get("role");
+    const normalizedRole =
+      nextRole === "resident" || nextRole === "worker" || nextRole === "admin"
+        ? nextRole
+        : "all";
+    if (normalizedRole !== roleFilter) {
+      setRoleFilter(normalizedRole);
+    }
+  }, [roleFilter, searchParams]);
 
   async function fetchUsers() {
     try {
@@ -343,7 +359,16 @@ export function UserManagement() {
         ].map((tab) => (
           <button
             key={tab.value}
-            onClick={() => setRoleFilter(tab.value)}
+            onClick={() => {
+              setRoleFilter(tab.value);
+              const nextParams = new URLSearchParams(searchParams);
+              if (tab.value === "all") {
+                nextParams.delete("role");
+              } else {
+                nextParams.set("role", tab.value);
+              }
+              setSearchParams(nextParams, { replace: true });
+            }}
             className={`px-4 py-2 text-sm font-medium rounded-lg border transition-colors ${
               roleFilter === tab.value
                 ? "bg-primary-600 text-white border-primary-600"

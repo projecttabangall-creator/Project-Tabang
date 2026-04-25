@@ -135,6 +135,10 @@ export function WorkerDetail() {
     []
   );
   const [enrolling, setEnrolling] = useState(false);
+  const [enrollmentStage, setEnrollmentStage] = useState("idle");
+  const [enrollmentMessage, setEnrollmentMessage] = useState(
+    "Preparing the fingerprint scanner."
+  );
   const [enrollError, setEnrollError] = useState<string | null>(null);
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
@@ -165,6 +169,41 @@ export function WorkerDetail() {
   useEffect(() => {
     setCredentialDrafts(buildWorkerCredentialDrafts(worker?.workerData?.credentials));
   }, [worker?.workerData?.credentials]);
+
+  useEffect(() => {
+    if (!enrolling || !workerId) return;
+
+    const fpUrl = import.meta.env.VITE_FINGERPRINT_URL || "http://localhost:5000";
+    let cancelled = false;
+
+    const pollStatus = async () => {
+      try {
+        const res = await fetch(`${fpUrl}/fingerprint/enroll-status/${workerId}`);
+        const result = await res.json();
+        if (!cancelled && result?.stage) {
+          setEnrollmentStage(result.stage);
+          setEnrollmentMessage(
+            result.message || "Fingerprint enrollment in progress."
+          );
+        }
+      } catch {
+        if (!cancelled) {
+          setEnrollmentStage("waiting_first_scan");
+          setEnrollmentMessage(
+            "Waiting for the fingerprint scanner to respond."
+          );
+        }
+      }
+    };
+
+    pollStatus();
+    const interval = window.setInterval(pollStatus, 700);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [enrolling, workerId]);
 
   const specializationLabel = useMemo(() => {
     const raw = worker?.workerData?.specialization;
@@ -203,6 +242,8 @@ export function WorkerDetail() {
 
     setEnrolling(true);
     setEnrollError(null);
+    setEnrollmentStage("starting");
+    setEnrollmentMessage("Preparing the fingerprint scanner.");
     try {
       const token = await firebaseAuth.currentUser?.getIdToken();
       const fpUrl = import.meta.env.VITE_FINGERPRINT_URL || "http://localhost:5000";
@@ -399,6 +440,45 @@ export function WorkerDetail() {
   const location = worker.workerData?.location;
   const latitude = location?.latitude ?? location?._latitude;
   const longitude = location?.longitude ?? location?._longitude;
+  const enrollmentSteps = [
+    {
+      key: "waiting_first_scan",
+      title: "First scan",
+      description: "Ask the worker to place their finger on the AS608 scanner.",
+    },
+    {
+      key: "first_scan_captured",
+      title: "First scan captured",
+      description: "The scanner read the first fingerprint successfully.",
+    },
+    {
+      key: "waiting_finger_removal",
+      title: "Remove finger",
+      description: "Tell the worker to lift their finger before the second scan.",
+    },
+    {
+      key: "waiting_second_scan",
+      title: "Second scan",
+      description: "Place the same finger on the scanner again for confirmation.",
+    },
+    {
+      key: "second_scan_captured",
+      title: "Finalizing",
+      description: "The second scan was captured. Saving the fingerprint template.",
+    },
+  ];
+  const enrollmentStepIndexByStage: Record<string, number> = {
+    starting: 0,
+    waiting_first_scan: 0,
+    first_scan_captured: 1,
+    waiting_finger_removal: 2,
+    waiting_second_scan: 3,
+    second_scan_captured: 4,
+    complete: 4,
+    error: 0,
+  };
+  const currentEnrollmentStep =
+    enrollmentStepIndexByStage[enrollmentStage] ?? enrollmentStepIndexByStage.starting;
 
   return (
     <div className="max-w-4xl mx-auto space-y-4">
@@ -849,15 +929,43 @@ export function WorkerDetail() {
       {/* Fingerprint Enrollment Modal */}
       {enrolling && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-lg p-6 max-w-sm w-full mx-4">
+          <div className="bg-white rounded-lg shadow-lg p-6 max-w-md w-full mx-4">
             <div className="flex flex-col items-center gap-4">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
               <h3 className="text-lg font-semibold text-slate-900">Fingerprint Enrollment in Progress</h3>
-              <div className="text-sm text-slate-600 space-y-2 text-center">
-                <p>1. Ask the worker to place their finger on the AS608 scanner.</p>
-                <p>2. Wait for the sensor to beep, then have them lift and place their finger a second time.</p>
-                <p>3. Do not close this window until enrollment is complete.</p>
+              <div className="w-full rounded-lg border border-primary-100 bg-primary-50 px-4 py-3 text-center">
+                <p className="text-sm font-medium text-primary-900">
+                  {enrollmentMessage}
+                </p>
+                <p className="text-xs text-primary-700 mt-1">
+                  Current stage: {enrollmentStage.split("_").join(" ")}
+                </p>
               </div>
+              <div className="w-full space-y-3">
+                {enrollmentSteps.map((step, index) => {
+                  const isComplete = index < currentEnrollmentStep;
+                  const isActive = index === currentEnrollmentStep;
+
+                  return (
+                    <div
+                      key={step.key}
+                      className={`rounded-lg border px-4 py-3 text-sm ${
+                        isActive
+                          ? "border-primary-300 bg-primary-50 text-primary-900"
+                          : isComplete
+                            ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                            : "border-slate-200 bg-slate-50 text-slate-500"
+                      }`}
+                    >
+                      <p className="font-medium">{step.title}</p>
+                      <p className="mt-1 text-xs">{step.description}</p>
+                    </div>
+                  );
+                })}
+              </div>
+              <p className="text-xs text-slate-500 text-center">
+                Keep this window open until enrollment finishes.
+              </p>
             </div>
           </div>
         </div>

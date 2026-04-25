@@ -58,12 +58,14 @@ export function AdminDashboard() {
           value: stats.totalResidents,
           icon: Users,
           color: "text-primary-600 bg-primary-50",
+          link: "/admin/users?role=resident",
         },
         {
           label: "Total Workers",
           value: stats.totalWorkers,
           icon: Wrench,
           color: "text-emerald-600 bg-emerald-50",
+          link: "/admin/workers?status=all",
         },
         {
           label: "Pending Verifications",
@@ -91,6 +93,7 @@ export function AdminDashboard() {
           value: stats.openDisputes,
           icon: AlertTriangle,
           color: "text-red-600 bg-red-50",
+          link: "/admin/disputes",
         },
       ]
     : [];

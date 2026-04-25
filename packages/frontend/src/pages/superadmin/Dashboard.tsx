@@ -49,12 +49,12 @@ export function SuperadminDashboard() {
 
   const statCards = stats
     ? [
-        { label: "Total Residents", value: stats.totalResidents, icon: Users, color: "text-primary-600 bg-primary-50" },
-        { label: "Total Workers", value: stats.totalWorkers, icon: Wrench, color: "text-emerald-600 bg-emerald-50" },
+        { label: "Total Residents", value: stats.totalResidents, icon: Users, color: "text-primary-600 bg-primary-50", link: "/admin/users?role=resident" },
+        { label: "Total Workers", value: stats.totalWorkers, icon: Wrench, color: "text-emerald-600 bg-emerald-50", link: "/admin/workers?status=all" },
         { label: "Pending Verifications", value: stats.pendingVerifications, icon: Clock, color: "text-yellow-600 bg-yellow-50", link: "/admin/workers?status=pending" },
         { label: "Active Requests", value: stats.activeRequests, icon: ClipboardCheck, color: "text-purple-600 bg-purple-50", link: "/admin/requests" },
         { label: "Pending Payments", value: stats.pendingPayments, icon: CreditCard, color: "text-orange-600 bg-orange-50", link: "/admin/payments" },
-        { label: "Open Disputes", value: stats.openDisputes, icon: AlertTriangle, color: "text-red-600 bg-red-50" },
+        { label: "Open Disputes", value: stats.openDisputes, icon: AlertTriangle, color: "text-red-600 bg-red-50", link: "/admin/disputes" },
       ]
     : [];
 

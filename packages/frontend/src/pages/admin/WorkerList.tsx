@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import {
   Ban,
@@ -34,6 +34,7 @@ interface Worker {
   accountStatus: string;
   workerData?: {
     specialization: string | string[];
+    biometricEnrolled?: boolean;
     averageRating: number;
     completedJobsCount: number;
     acceptanceRate: number;
@@ -43,10 +44,20 @@ interface Worker {
 
 export function WorkerList() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<string>(() => {
+    const status = searchParams.get("status");
+    return status === "pending" || status === "verified" ? status : "all";
+  });
+  const [biometricFilter, setBiometricFilter] = useState<string>(() => {
+    const biometric = searchParams.get("biometric");
+    return biometric === "enrolled" || biometric === "not-enrolled"
+      ? biometric
+      : "all";
+  });
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [sortBy, setSortBy] = useState<string>("name");
   const [searchQuery, setSearchQuery] = useState("");
@@ -59,7 +70,24 @@ export function WorkerList() {
     }, 5000);
 
     fetchWorkers().finally(() => clearTimeout(timeout));
-  }, [statusFilter, categoryFilter, sortBy]);
+  }, [statusFilter, biometricFilter, categoryFilter, sortBy]);
+
+  useEffect(() => {
+    const nextStatus = searchParams.get("status");
+    const normalizedStatus =
+      nextStatus === "pending" || nextStatus === "verified" ? nextStatus : "all";
+    if (normalizedStatus !== statusFilter) {
+      setStatusFilter(normalizedStatus);
+    }
+    const nextBiometric = searchParams.get("biometric");
+    const normalizedBiometric =
+      nextBiometric === "enrolled" || nextBiometric === "not-enrolled"
+        ? nextBiometric
+        : "all";
+    if (normalizedBiometric !== biometricFilter) {
+      setBiometricFilter(normalizedBiometric);
+    }
+  }, [biometricFilter, searchParams, statusFilter]);
 
   async function fetchWorkers() {
     try {
@@ -91,8 +119,17 @@ export function WorkerList() {
 
   const visibleWorkers = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
+    const filteredByBiometric =
+      biometricFilter === "all"
+        ? workers
+        : workers.filter((worker) =>
+            biometricFilter === "enrolled"
+              ? Boolean(worker.workerData?.biometricEnrolled)
+              : !worker.workerData?.biometricEnrolled
+          );
+
     const filtered = query
-      ? workers.filter((worker) => {
+      ? filteredByBiometric.filter((worker) => {
           const fullName = [
             worker.firstName,
             worker.middleInitial,
@@ -112,7 +149,7 @@ export function WorkerList() {
 
           return fullName.includes(query);
         })
-      : workers;
+      : filteredByBiometric;
 
     if (sortBy !== "name") return filtered;
 
@@ -121,7 +158,7 @@ export function WorkerList() {
       const bName = `${b.lastName} ${b.firstName}`.toLowerCase();
       return aName.localeCompare(bName);
     });
-  }, [categoryNameById, searchQuery, sortBy, workers]);
+  }, [biometricFilter, categoryNameById, searchQuery, sortBy, workers]);
 
   async function handleVerify(workerId: string) {
     try {
@@ -194,7 +231,16 @@ export function WorkerList() {
         ].map((tab) => (
           <button
             key={tab.value}
-            onClick={() => setStatusFilter(tab.value)}
+            onClick={() => {
+              setStatusFilter(tab.value);
+              const nextParams = new URLSearchParams(searchParams);
+              if (tab.value === "all") {
+                nextParams.delete("status");
+              } else {
+                nextParams.set("status", tab.value);
+              }
+              setSearchParams(nextParams, { replace: true });
+            }}
             className={`px-4 py-2 text-sm font-medium rounded-lg border transition-colors ${
               statusFilter === tab.value
                 ? "bg-primary-600 text-white border-primary-600"
@@ -207,7 +253,7 @@ export function WorkerList() {
       </div>
 
       <div className="card mb-4">
-        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_220px_180px] gap-3">
+        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_220px_190px_180px] gap-3">
           <div className="relative">
             <Search
               size={16}
@@ -239,6 +285,29 @@ export function WorkerList() {
           </label>
 
           <label className="block">
+            <span className="sr-only">Biometric enrollment</span>
+            <select
+              value={biometricFilter}
+              onChange={(e) => {
+                const value = e.target.value;
+                setBiometricFilter(value);
+                const nextParams = new URLSearchParams(searchParams);
+                if (value === "all") {
+                  nextParams.delete("biometric");
+                } else {
+                  nextParams.set("biometric", value);
+                }
+                setSearchParams(nextParams, { replace: true });
+              }}
+              className="input-field"
+            >
+              <option value="all">All biometrics</option>
+              <option value="enrolled">Fingerprint enrolled</option>
+              <option value="not-enrolled">No fingerprint yet</option>
+            </select>
+          </label>
+
+          <label className="block">
             <span className="sr-only">Sort workers</span>
             <select
               value={sortBy}
@@ -263,7 +332,7 @@ export function WorkerList() {
         <div className="card text-center py-12">
           <p className="text-slate-500">No workers found.</p>
           <p className="text-sm text-slate-400 mt-1">
-            Try changing the search, category, sort, or status filters.
+            Try changing the search, biometric, category, sort, or status filters.
           </p>
         </div>
       ) : (
@@ -317,6 +386,17 @@ export function WorkerList() {
                     <span className="flex items-center gap-1">
                       <Shield size={12} />
                       {worker.creditPoints}/5 credit
+                    </span>
+                    <span
+                      className={`rounded-full px-2 py-0.5 font-medium ${
+                        worker.workerData?.biometricEnrolled
+                          ? "bg-emerald-50 text-emerald-700"
+                          : "bg-slate-100 text-slate-600"
+                      }`}
+                    >
+                      {worker.workerData?.biometricEnrolled
+                        ? "Fingerprint enrolled"
+                        : "No fingerprint"}
                     </span>
                   </div>
                 </div>
