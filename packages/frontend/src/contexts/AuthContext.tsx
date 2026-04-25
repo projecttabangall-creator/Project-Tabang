@@ -70,11 +70,19 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
+const ADMIN_IDLE_TIMEOUT_MS = 15 * 60 * 1000;
+const ADMIN_ACTIVITY_STORAGE_KEY = "tabang_admin_last_activity";
+
+function isPrivilegedRole(role?: UserRole | null): boolean {
+  return role === "admin" || role === "superadmin";
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const profileUnsubscribeRef = useRef<(() => void) | null>(null);
+  const idleTimeoutRef = useRef<number | null>(null);
 
   // Helper to convert Firestore Timestamp to Date
   function toDate(value: any): Date | null {
@@ -171,8 +179,104 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Sign out
   async function signOut() {
     await firebaseSignOut(firebaseAuth);
+    window.localStorage.removeItem(ADMIN_ACTIVITY_STORAGE_KEY);
     setUserProfile(null);
   }
+
+  useEffect(() => {
+    if (!firebaseUser || !userProfile || !isPrivilegedRole(userProfile.role)) {
+      if (idleTimeoutRef.current !== null) {
+        window.clearTimeout(idleTimeoutRef.current);
+        idleTimeoutRef.current = null;
+      }
+      return;
+    }
+
+    let isDisposed = false;
+
+    const clearIdleTimeout = () => {
+      if (idleTimeoutRef.current !== null) {
+        window.clearTimeout(idleTimeoutRef.current);
+        idleTimeoutRef.current = null;
+      }
+    };
+
+    const forceSignOutForInactivity = async () => {
+      clearIdleTimeout();
+      window.localStorage.removeItem(ADMIN_ACTIVITY_STORAGE_KEY);
+
+      if (!isDisposed) {
+        await firebaseSignOut(firebaseAuth);
+        setUserProfile(null);
+      }
+    };
+
+    const scheduleIdleTimeout = (lastActivityAt: number) => {
+      clearIdleTimeout();
+      const elapsed = Date.now() - lastActivityAt;
+
+      if (elapsed >= ADMIN_IDLE_TIMEOUT_MS) {
+        void forceSignOutForInactivity();
+        return;
+      }
+
+      idleTimeoutRef.current = window.setTimeout(() => {
+        void forceSignOutForInactivity();
+      }, ADMIN_IDLE_TIMEOUT_MS - elapsed);
+    };
+
+    const recordActivity = () => {
+      const now = Date.now();
+      window.localStorage.setItem(ADMIN_ACTIVITY_STORAGE_KEY, String(now));
+      scheduleIdleTimeout(now);
+    };
+
+    const syncActivityFromStorage = () => {
+      const rawValue = window.localStorage.getItem(ADMIN_ACTIVITY_STORAGE_KEY);
+      const lastActivityAt = rawValue ? Number(rawValue) : NaN;
+
+      if (!Number.isFinite(lastActivityAt)) {
+        recordActivity();
+        return;
+      }
+
+      scheduleIdleTimeout(lastActivityAt);
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        syncActivityFromStorage();
+      }
+    };
+
+    const activityEvents: Array<keyof WindowEventMap> = [
+      "mousedown",
+      "keydown",
+      "scroll",
+      "touchstart",
+      "click",
+    ];
+
+    syncActivityFromStorage();
+
+    for (const eventName of activityEvents) {
+      window.addEventListener(eventName, recordActivity, { passive: true });
+    }
+    window.addEventListener("focus", syncActivityFromStorage);
+    window.addEventListener("storage", syncActivityFromStorage);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      isDisposed = true;
+      clearIdleTimeout();
+      for (const eventName of activityEvents) {
+        window.removeEventListener(eventName, recordActivity);
+      }
+      window.removeEventListener("focus", syncActivityFromStorage);
+      window.removeEventListener("storage", syncActivityFromStorage);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [firebaseUser, userProfile]);
 
   // Refresh profile data (kept for backward compatibility but works via onSnapshot now)
   async function refreshProfile() {
