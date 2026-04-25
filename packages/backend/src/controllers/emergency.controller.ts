@@ -19,6 +19,32 @@ const emergenciesRef = db.collection("emergencies");
 const categoriesRef = db.collection("categories");
 const usersRef = db.collection("users");
 
+function toStringArray(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.filter((item): item is string => typeof item === "string");
+  }
+  if (typeof value === "string" && value.trim()) {
+    return [value];
+  }
+  return [];
+}
+
+function getApplicantArray(value: unknown): any[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function workerMatchesEmergency(
+  specialization: unknown,
+  categoryIds: unknown
+): boolean {
+  const workerCategories = toStringArray(specialization);
+  const emergencyCategories = toStringArray(categoryIds);
+
+  return workerCategories.some((categoryId) =>
+    emergencyCategories.includes(categoryId)
+  );
+}
+
 function stripRewardForNonAdmin(
   role: string,
   data: FirebaseFirestore.DocumentData
@@ -32,7 +58,7 @@ function applicantVisibleToWorker(
   workerUid: string,
   data: FirebaseFirestore.DocumentData
 ): FirebaseFirestore.DocumentData {
-  const mine = (data.applicants ?? []).find(
+  const mine = getApplicantArray(data.applicants).find(
     (a: any) => a.workerId === workerUid
   );
   // Workers only see their own application record, not the full applicant list.
@@ -169,8 +195,7 @@ export async function listEmergencies(
       const specialization = userDoc.data()?.workerData?.specialization;
       docs = docs.map((d) => ({
         ...applicantVisibleToWorker(uid, d),
-        canApply:
-          !!specialization && (d.categoryIds ?? []).includes(specialization),
+        canApply: workerMatchesEmergency(specialization, d.categoryIds),
       }));
     }
 
@@ -208,8 +233,7 @@ export async function getEmergency(
       const userDoc = await usersRef.doc(uid).get();
       const specialization = userDoc.data()?.workerData?.specialization;
       data = applicantVisibleToWorker(uid, data);
-      data.canApply =
-        !!specialization && (data.categoryIds ?? []).includes(specialization);
+      data.canApply = workerMatchesEmergency(specialization, data.categoryIds);
     }
 
     if (role !== "admin") {
@@ -331,12 +355,12 @@ export async function applyToEmergency(
     const userDoc = await usersRef.doc(workerUid).get();
     const userData = userDoc.data();
     const specialization = userData?.workerData?.specialization;
-    if (!specialization || !data.categoryIds.includes(specialization)) {
+    if (!workerMatchesEmergency(specialization, data.categoryIds)) {
       res.status(403).json({ error: "Your specialization does not match this emergency" });
       return;
     }
 
-    const applicants = (data.applicants ?? []) as any[];
+    const applicants = getApplicantArray(data.applicants);
     if (applicants.some((a) => a.workerId === workerUid)) {
       res.status(400).json({ error: "You have already applied to this emergency" });
       return;
@@ -395,16 +419,25 @@ export async function reviewApplicant(
       return;
     }
     const data = emergencyDoc.data()!;
-    const applicants = (data.applicants ?? []) as any[];
+    const applicants = getApplicantArray(data.applicants);
     const idx = applicants.findIndex((a) => a.workerId === workerId);
     if (idx === -1) {
       res.status(404).json({ error: "Applicant not found" });
       return;
     }
 
+    const updatedApplicants = applicants.map((applicant, applicantIndex) =>
+      applicantIndex === idx
+        ? {
+            ...applicant,
+            approvalStatus: body.approvalStatus,
+            approvedAt: Timestamp.now(),
+          }
+        : applicant
+    );
+
     await emergenciesRef.doc(id).update({
-      [`applicants.${idx}.approvalStatus`]: body.approvalStatus,
-      [`applicants.${idx}.approvedAt`]: Timestamp.now(),
+      applicants: updatedApplicants,
     });
 
     await db.collection("notifications").add({
@@ -459,7 +492,7 @@ export async function awardApplicantCredits(
       res.status(400).json({ error: "Credits can only be awarded after the emergency is completed" });
       return;
     }
-    const applicants = (data.applicants ?? []) as any[];
+    const applicants = getApplicantArray(data.applicants);
     const idx = applicants.findIndex((a) => a.workerId === workerId);
     if (idx === -1) {
       res.status(404).json({ error: "Applicant not found" });
@@ -472,9 +505,18 @@ export async function awardApplicantCredits(
 
     const { newBalance } = await awardEmergencyCredits(workerId, body.amount, id);
 
+    const updatedApplicants = applicants.map((applicant, applicantIndex) =>
+      applicantIndex === idx
+        ? {
+            ...applicant,
+            creditAwarded: body.amount,
+            awardedAt: Timestamp.now(),
+          }
+        : applicant
+    );
+
     await emergenciesRef.doc(id).update({
-      [`applicants.${idx}.creditAwarded`]: body.amount,
-      [`applicants.${idx}.awardedAt`]: Timestamp.now(),
+      applicants: updatedApplicants,
     });
 
     await db.collection("notifications").add({

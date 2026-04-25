@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import api from "@/services/api";
 import { BackButton } from "@/components/common/BackButton";
 import logoWithText from "@Assets/logo-with-text.png";
+import { normalizePhilippinePhoneNumber } from "@/utils/phone";
 
 interface RegisterForm {
   firstName: string;
@@ -39,11 +40,15 @@ export function Register() {
   async function onSubmit(data: RegisterForm) {
     setIsLoading(true);
     try {
+      const normalizedContactNumber = normalizePhilippinePhoneNumber(
+        data.contactNumber,
+        "local"
+      );
       await api.post("/api/auth/register", {
         firstName: data.firstName,
         lastName: data.lastName,
         middleInitial: data.middleInitial,
-        contactNumber: data.contactNumber,
+        contactNumber: normalizedContactNumber,
         password: data.password,
         address: {
           street: data.street,
@@ -53,7 +58,7 @@ export function Register() {
         },
       });
 
-      toast.success("Registration successful! You can now sign in.");
+      toast.success("Registration successful. You can now sign in.");
       navigate("/login");
     } catch (error: any) {
       const message =

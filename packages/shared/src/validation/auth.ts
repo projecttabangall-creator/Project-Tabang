@@ -55,26 +55,30 @@ export const registerWorkerSchema = z.object({
 });
 
 export const loginSchema = z.object({
-  contactNumber: z.string().min(1, "Contact number is required"),
+  contactNumber: z
+    .string()
+    .min(1, "Contact number is required")
+    .regex(/^(\+63|0)\d{10}$/, "Invalid Philippine phone number format"),
   password: z.string().min(1, "Password is required"),
 });
 
-export const verifyOtpSchema = z.object({
-  contactNumber: z.string().min(1, "Contact number is required"),
-  otp: z.string().length(6, "OTP must be 6 digits"),
+export const requestPasswordResetSchema = z.object({
+  firstName: z.string().min(1, "First name is required"),
+  lastName: z.string().min(1, "Last name is required"),
+  role: z.enum(["resident", "worker"]),
+  contactNumber: z
+    .string()
+    .min(1, "Contact number is required")
+    .regex(/^(\+63|0)\d{10}$/, "Invalid Philippine phone number format"),
+  note: z.string().trim().max(500).optional().default(""),
 });
 
-export const resetPasswordSchema = z.object({
-  contactNumber: z.string().min(1, "Contact number is required"),
-});
-
-export const confirmResetPasswordSchema = z.object({
-  contactNumber: z.string().min(1, "Contact number is required"),
-  otp: z.string().length(6, "OTP must be 6 digits"),
+export const changePasswordSchema = z.object({
   newPassword: z.string().min(8, "Password must be at least 8 characters"),
 });
 
 export type RegisterResidentInput = z.infer<typeof registerResidentSchema>;
 export type RegisterWorkerInput = z.infer<typeof registerWorkerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
-export type VerifyOtpInput = z.infer<typeof verifyOtpSchema>;
+export type RequestPasswordResetInput = z.infer<typeof requestPasswordResetSchema>;
+export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;

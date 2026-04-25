@@ -90,6 +90,12 @@ export function EmergencyCreate() {
       .catch(() => toast.error("Failed to load categories"));
   }, []);
 
+  function normalizePhoneInput(value: string) {
+    const raw = value.replace(/[^\d+]/g, "");
+    const maxLen = raw.startsWith("+") ? 13 : 11;
+    return raw.slice(0, maxLen);
+  }
+
   function toggleCategory(id: string) {
     setSelectedCategoryIds((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
@@ -227,7 +233,16 @@ export function EmergencyCreate() {
                 placeholder="09XX-XXX-XXXX"
                 {...register("requesterContact", {
                   required: "Contact is required",
+                  pattern: {
+                    value: /^(\+63|0)\d{10}$/,
+                    message: "Enter a valid PH number (e.g. 09171234567)",
+                  },
+                  onChange: (e) => {
+                    e.target.value = normalizePhoneInput(e.target.value);
+                  },
                 })}
+                inputMode="tel"
+                maxLength={13}
               />
               {errors.requesterContact && (
                 <p className="text-rose-500 text-xs mt-1">

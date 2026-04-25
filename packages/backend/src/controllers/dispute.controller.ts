@@ -17,7 +17,8 @@ import {
 
 interface FileDisputeBody {
   requestId: string;
-  disputeType: string;
+  disputeTypes: string[];
+  otherDetails?: string;
   description: string;
   evidenceUrls?: string[];
 }
@@ -31,11 +32,47 @@ interface ResolveDisputeBody {
 
 const disputesRef = db.collection("disputes");
 const requestsRef = db.collection("serviceRequests");
+const usersRef = db.collection("users");
 
 type DisputeListItem = FirebaseFirestore.DocumentData & {
   id: string;
   createdAt?: unknown;
 };
+
+type DisputePartySummary = {
+  userId: string;
+  role: string;
+  firstName: string;
+  lastName: string;
+  fullName: string;
+};
+
+function buildPartySummary(
+  userId: string,
+  data: FirebaseFirestore.DocumentData | undefined
+): DisputePartySummary {
+  const firstName =
+    typeof data?.firstName === "string" ? data.firstName.trim() : "";
+  const lastName =
+    typeof data?.lastName === "string" ? data.lastName.trim() : "";
+  const fullName = `${firstName} ${lastName}`.trim() || `User ${userId.slice(-6)}`;
+
+  return {
+    userId,
+    role: typeof data?.role === "string" ? data.role : "unknown",
+    firstName,
+    lastName,
+    fullName,
+  };
+}
+
+function formatDisputeTypeLabel(value: string): string {
+  return value.replace(/_/g, " ");
+}
+
+function formatDisputeTypes(types: string[]): string {
+  return types.map(formatDisputeTypeLabel).join(", ");
+}
 
 function timestampMillis(value: unknown): number {
   if (value instanceof Timestamp) return value.toMillis();
@@ -232,11 +269,18 @@ export async function fileDispute(
         )
       : [];
 
+    const disputeTypes = Array.from(
+      new Set((body.disputeTypes ?? []).filter((value) => typeof value === "string"))
+    );
+    const disputeTypeSummary = formatDisputeTypes(disputeTypes);
+
     const disputeRef = await disputesRef.add({
       requestId: body.requestId,
       filedBy: userId,
       filedAgainst,
-      disputeType: body.disputeType,
+      disputeType: disputeTypes[0] ?? "other",
+      disputeTypes,
+      otherDetails: body.otherDetails?.trim() || "",
       description: body.description,
       evidenceUrls: uploadedUrls,
       status: DISPUTE_STATUSES.OPEN,
@@ -256,7 +300,7 @@ export async function fileDispute(
         userId: adminDoc.id,
         type: "dispute_filed",
         title: "New Dispute Filed",
-        body: `${body.disputeType.replace(/_/g, " ")} dispute for ${requestData.categoryName}`,
+        body: `${disputeTypeSummary} dispute for ${requestData.categoryName}`,
         referenceType: "dispute",
         referenceId: disputeRef.id,
         isRead: false,
@@ -268,7 +312,7 @@ export async function fileDispute(
       userId: filedAgainst,
       type: "dispute_filed",
       title: "Dispute Filed Against You",
-      body: `A ${body.disputeType.replace(/_/g, " ")} dispute has been filed`,
+      body: `A ${disputeTypeSummary} dispute has been filed`,
       referenceType: "dispute",
       referenceId: disputeRef.id,
       isRead: false,
@@ -280,7 +324,7 @@ export async function fileDispute(
       performedBy: userId,
       targetRequestId: body.requestId,
       targetDisputeId: disputeRef.id,
-      details: `Dispute filed: ${body.disputeType} - ${body.description.slice(0, 100)}`,
+      details: `Dispute filed: ${disputeTypeSummary} - ${body.description.slice(0, 100)}`,
       createdAt: FieldValue.serverTimestamp(),
     });
 
@@ -313,9 +357,33 @@ export async function listDisputes(
     }
 
     const snapshot = await query.get();
-    const disputes: DisputeListItem[] = snapshot.docs.map((doc) => ({
+    const rawDisputes: DisputeListItem[] = snapshot.docs.map((doc) => ({
       id: doc.id,
       ...doc.data(),
+    }));
+
+    const userIds = Array.from(
+      new Set(
+        rawDisputes.flatMap((dispute) =>
+          [dispute.filedBy, dispute.filedAgainst].filter(
+            (value): value is string => typeof value === "string" && value.length > 0
+          )
+        )
+      )
+    );
+
+    const userDocs = await Promise.all(userIds.map((userId) => usersRef.doc(userId).get()));
+    const userMap = new Map(
+      userDocs.map((doc) => [doc.id, doc.exists ? doc.data() : undefined])
+    );
+
+    const disputes = rawDisputes.map((dispute) => ({
+      ...dispute,
+      filedByUser: buildPartySummary(dispute.filedBy, userMap.get(dispute.filedBy)),
+      filedAgainstUser: buildPartySummary(
+        dispute.filedAgainst,
+        userMap.get(dispute.filedAgainst)
+      ),
     }));
 
     disputes.sort(

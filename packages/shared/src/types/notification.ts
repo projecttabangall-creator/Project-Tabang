@@ -6,7 +6,12 @@ export type NotificationType =
   | "dispute"
   | "system";
 
-export type NotificationRefType = "request" | "dispute" | "payment";
+export type NotificationRefType =
+  | "request"
+  | "dispute"
+  | "payment"
+  | "emergency"
+  | "password_reset";
 
 export interface Notification {
   id: string;

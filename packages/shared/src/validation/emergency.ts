@@ -1,9 +1,14 @@
 import { z } from "zod";
 
+const philippinePhoneRegex = /^(\+63|0)\d{10}$/;
+
 export const createEmergencySchema = z.object({
   title: z.string().min(3, "Title must be at least 3 characters").max(120),
   requesterName: z.string().min(2, "Requester name is required"),
-  requesterContact: z.string().min(7, "Requester contact is required"),
+  requesterContact: z
+    .string()
+    .min(1, "Requester contact is required")
+    .regex(philippinePhoneRegex, "Invalid Philippine phone number format"),
   categoryIds: z.array(z.string().min(1)).min(1, "Select at least one category"),
   details: z.string().min(10, "Details must be at least 10 characters"),
   needsList: z.array(z.string().min(1)).optional().default([]),

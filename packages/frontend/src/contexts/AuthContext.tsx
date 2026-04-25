@@ -15,6 +15,7 @@ import {
 import { doc, getDoc, onSnapshot } from "firebase/firestore";
 import { firebaseAuth, firestore } from "@/config/firebase";
 import { UserRole } from "@tabang/shared";
+import { buildAuthEmailCandidates } from "@/utils/phone";
 
 interface AvailabilitySlot {
   dayOfWeek: number;
@@ -53,6 +54,7 @@ export interface UserProfile {
   banReason?: string;
   bannedAt?: Date;
   creditPoints: number;
+  mustChangePassword?: boolean;
   profilePhotoUrl?: string;
   workerData?: WorkerData;
 }
@@ -122,6 +124,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               banReason: data.banReason,
               bannedAt: toDate(data.bannedAt) ?? undefined,
               creditPoints: data.creditPoints,
+              mustChangePassword: Boolean(data.mustChangePassword),
               profilePhotoUrl: data.profilePhotoUrl,
               workerData: data.workerData,
             });
@@ -148,8 +151,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Sign in with contact number (converted to email format) and password
   async function signIn(contactNumber: string, password: string) {
-    const email = `${contactNumber.replace(/\+/g, "")}@tabang.local`;
-    await signInWithEmailAndPassword(firebaseAuth, email, password);
+    let lastError: unknown = null;
+
+    for (const email of buildAuthEmailCandidates(contactNumber)) {
+      try {
+        await signInWithEmailAndPassword(firebaseAuth, email, password);
+        return;
+      } catch (error: any) {
+        lastError = error;
+        if (error.code !== "auth/invalid-credential") {
+          throw error;
+        }
+      }
+    }
+
+    throw lastError;
   }
 
   // Sign out
@@ -183,6 +199,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         banReason: data.banReason,
         bannedAt: toDate(data.bannedAt) ?? undefined,
         creditPoints: data.creditPoints,
+        mustChangePassword: Boolean(data.mustChangePassword),
         profilePhotoUrl: data.profilePhotoUrl,
         workerData: data.workerData,
       });

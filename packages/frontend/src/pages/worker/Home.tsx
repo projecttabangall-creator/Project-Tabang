@@ -12,6 +12,7 @@ interface Request {
   description: string;
   suggestedPrice: number;
   finalPrice?: number;
+  tipAmount?: number;
   schedule: { date: string; startTime: string; endTime: string };
   status: string;
   residentName: string;
@@ -198,11 +199,17 @@ export function WorkerHome() {
             <Briefcase size={20} /> Pending Requests (Action Required)
           </h3>
           <div className="space-y-3">
-            {pendingRequests.map((request) => (
+            {pendingRequests.map((request) => {
+              const hasTip = (request.tipAmount ?? 0) > 0;
+              return (
               <Link
                 key={request.id}
                 to={`/worker/job/${request.id}`}
-                className="card block hover:border-primary-300 transition-colors"
+                className={`card block transition-all ${
+                  hasTip
+                    ? "border-amber-300 animate-tip-glow"
+                    : "hover:border-primary-300"
+                }`}
               >
                 <div className="flex items-start justify-between mb-3">
                   <div>
@@ -217,6 +224,15 @@ export function WorkerHome() {
                 <p className="text-sm text-slate-700 mb-3 line-clamp-2">
                   {request.description}
                 </p>
+
+                {hasTip && (
+                  <div className="mb-3 flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+                    <span className="text-lg">🎁</span>
+                    <span className="text-sm font-semibold text-amber-800">
+                      Tip from Resident: PHP {request.tipAmount}
+                    </span>
+                  </div>
+                )}
 
                 <div className="flex items-center gap-4 text-xs text-slate-500 mb-3">
                   <span className="flex items-center gap-1">
@@ -234,7 +250,8 @@ export function WorkerHome() {
                   </span>
                 </div>
               </Link>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

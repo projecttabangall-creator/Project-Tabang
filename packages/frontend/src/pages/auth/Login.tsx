@@ -5,6 +5,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { BackButton } from "@/components/common/BackButton";
 import logoWithText from "@Assets/logo-with-text.png";
+import { normalizePhilippinePhoneNumber } from "@/utils/phone";
 
 interface LoginForm {
   contactNumber: string;
@@ -23,11 +24,20 @@ export function Login() {
     formState: { errors },
   } = useForm<LoginForm>();
 
+  function normalizePhoneInput(value: string) {
+    const raw = value.replace(/[^\d+]/g, "");
+    const maxLen = raw.startsWith("+") ? 13 : 11;
+    return raw.slice(0, maxLen);
+  }
+
   async function onSubmit(data: LoginForm) {
     setIsLoading(true);
     setNotFound(false);
     try {
-      await signIn(data.contactNumber, data.password);
+      await signIn(
+        normalizePhilippinePhoneNumber(data.contactNumber, "local"),
+        data.password
+      );
       toast.success("Logged in successfully");
       // AuthContext will detect the user and redirect via ProtectedRoute
       navigate("/");
@@ -79,7 +89,16 @@ export function Login() {
                 className="input-field"
                 {...register("contactNumber", {
                   required: "Contact number is required",
+                  pattern: {
+                    value: /^(\+63|0)\d{10}$/,
+                    message: "Enter a valid PH number (e.g. 09171234567)",
+                  },
+                  onChange: (e) => {
+                    e.target.value = normalizePhoneInput(e.target.value);
+                  },
                 })}
+                inputMode="tel"
+                maxLength={13}
               />
               {errors.contactNumber && (
                 <p className="text-red-500 text-xs mt-1">
@@ -112,13 +131,22 @@ export function Login() {
               {isLoading ? "Signing in..." : "Sign In"}
             </button>
 
+            <div className="text-center">
+              <Link
+                to="/forgot-password"
+                className="text-sm font-medium text-primary-600 hover:text-primary-700"
+              >
+                Forgot password?
+              </Link>
+            </div>
+
             {notFound && (
               <div className="mt-4 rounded-lg bg-red-50 border border-red-200 p-4 text-center">
                 <p className="text-sm font-medium text-red-700">
-                  No account found for that contact number.
+                  Invalid contact number or password.
                 </p>
                 <p className="text-sm text-red-600 mt-1">
-                  Please check the number or{" "}
+                  Please check your number and password, or{" "}
                   <Link to="/register" className="font-semibold underline">
                     create a new account
                   </Link>
@@ -134,13 +162,8 @@ export function Login() {
             )}
           </form>
 
-          <div className="mt-4 text-center text-sm">
-            <Link
-              to="/forgot-password"
-              className="text-primary-600 hover:text-primary-700"
-            >
-              Forgot password?
-            </Link>
+          <div className="mt-4 text-center text-sm text-slate-500">
+            Password recovery is handled through an admin review request.
           </div>
 
           <div className="mt-6 pt-6 border-t border-slate-200 text-center text-sm text-slate-500">

@@ -1,18 +1,16 @@
 import { Router } from "express";
 import { validate } from "../middleware/validate";
 import {
+  changePasswordSchema,
   registerResidentSchema,
   loginSchema,
-  verifyOtpSchema,
-  resetPasswordSchema,
-  confirmResetPasswordSchema,
+  requestPasswordResetSchema,
 } from "@tabang/shared";
 import {
+  changePassword,
+  requestPasswordReset,
   registerResident,
-  verifyOtp,
   login,
-  resetPassword,
-  confirmResetPassword,
   getCurrentUser,
   updateProfile,
 } from "../controllers/auth.controller";
@@ -22,15 +20,19 @@ export const authRouter = Router();
 
 // Public routes
 authRouter.post("/register", validate(registerResidentSchema), registerResident);
-authRouter.post("/verify-otp", validate(verifyOtpSchema), verifyOtp);
 authRouter.post("/login", validate(loginSchema), login);
-authRouter.post("/reset-password", validate(resetPasswordSchema), resetPassword);
 authRouter.post(
-  "/reset-password/confirm",
-  validate(confirmResetPasswordSchema),
-  confirmResetPassword
+  "/request-password-reset",
+  validate(requestPasswordResetSchema),
+  requestPasswordReset
 );
 
 // Protected routes
 authRouter.get("/me", verifyToken, getCurrentUser);
 authRouter.patch("/profile", verifyToken, updateProfile);
+authRouter.post(
+  "/change-password",
+  verifyToken,
+  validate(changePasswordSchema),
+  changePassword
+);

@@ -68,18 +68,24 @@ function getNotificationLink(
     return `/admin/requests`;
   }
   if (referenceType === "dispute") {
-    if (role === "admin") return `/admin/disputes`;
+    if (role === "admin" || role === "superadmin") return `/admin/disputes`;
     return `/${role}/notifications`;
   }
   if (referenceType === "payment") {
-    if (role === "admin") return `/admin/payments`;
+    if (role === "admin" || role === "superadmin") return `/admin/payments`;
     if (role === "resident") return `/resident/request/${referenceId}`;
     return `/${role}/notifications`;
   }
   if (referenceType === "emergency") {
-    if (role === "admin") return `/admin/emergencies/${referenceId}`;
+    if (role === "admin" || role === "superadmin") {
+      return `/admin/emergencies/${referenceId}`;
+    }
     if (role === "resident") return `/resident/emergencies`;
     if (role === "worker") return `/worker/emergencies`;
+  }
+  if (referenceType === "password_reset") {
+    if (role === "admin" || role === "superadmin") return "/admin/users";
+    return `/${role}/notifications`;
   }
   return `/${role}/notifications`;
 }
@@ -174,6 +180,8 @@ export function Notifications() {
       ? "/resident/requests"
       : userProfile?.role === "worker"
       ? "/worker/home"
+      : userProfile?.role === "superadmin"
+      ? "/superadmin/dashboard"
       : "/admin/dashboard";
 
   return (

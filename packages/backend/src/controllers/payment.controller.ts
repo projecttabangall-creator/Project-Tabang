@@ -18,10 +18,35 @@ interface SubmitPaymentBody {
 
 const paymentsRef = db.collection("payments");
 const requestsRef = db.collection("serviceRequests");
+const usersRef = db.collection("users");
 
 type PaymentListItem = FirebaseFirestore.DocumentData & {
   id: string;
   createdAt?: unknown;
+};
+
+type PaymentPartySummary = {
+  userId: string;
+  fullName: string;
+  role: string;
+  contactNumber: string;
+};
+
+type PaymentRequestSummary = {
+  id: string;
+  categoryName: string;
+  description: string;
+  status: string;
+  locationAddress: string;
+  beneficiaryName: string;
+  finalPrice: number | null;
+  totalForResident: number | null;
+  commission: number | null;
+  paymentMethod: string;
+  rating: number | null;
+  ratingComment: string;
+  createdAt: unknown;
+  completedAt: unknown;
 };
 
 function timestampMillis(value: unknown): number {
@@ -32,6 +57,53 @@ function timestampMillis(value: unknown): number {
     return Number.isNaN(time) ? 0 : time;
   }
   return 0;
+}
+
+function buildPartySummary(
+  userId: string,
+  data: FirebaseFirestore.DocumentData | undefined
+): PaymentPartySummary {
+  const firstName =
+    typeof data?.firstName === "string" ? data.firstName.trim() : "";
+  const lastName =
+    typeof data?.lastName === "string" ? data.lastName.trim() : "";
+
+  return {
+    userId,
+    fullName: `${firstName} ${lastName}`.trim() || `User ${userId.slice(-6)}`,
+    role: typeof data?.role === "string" ? data.role : "unknown",
+    contactNumber:
+      typeof data?.contactNumber === "string" ? data.contactNumber : "",
+  };
+}
+
+function buildRequestSummary(
+  requestId: string,
+  data: FirebaseFirestore.DocumentData | undefined
+): PaymentRequestSummary {
+  return {
+    id: requestId,
+    categoryName:
+      typeof data?.categoryName === "string" ? data.categoryName : "",
+    description:
+      typeof data?.description === "string" ? data.description : "",
+    status: typeof data?.status === "string" ? data.status : "",
+    locationAddress:
+      typeof data?.locationAddress === "string" ? data.locationAddress : "",
+    beneficiaryName:
+      typeof data?.beneficiaryName === "string" ? data.beneficiaryName : "",
+    finalPrice: typeof data?.finalPrice === "number" ? data.finalPrice : null,
+    totalForResident:
+      typeof data?.totalForResident === "number" ? data.totalForResident : null,
+    commission: typeof data?.commission === "number" ? data.commission : null,
+    paymentMethod:
+      typeof data?.paymentMethod === "string" ? data.paymentMethod : "",
+    rating: typeof data?.rating === "number" ? data.rating : null,
+    ratingComment:
+      typeof data?.ratingComment === "string" ? data.ratingComment : "",
+    createdAt: data?.createdAt ?? null,
+    completedAt: data?.completedAt ?? null,
+  };
 }
 
 /**
@@ -208,9 +280,52 @@ export async function getPendingPayments(
       .where("status", "==", PAYMENT_STATUSES.PENDING)
       .get();
 
-    const payments: PaymentListItem[] = snapshot.docs.map((doc) => ({
+    const rawPayments: PaymentListItem[] = snapshot.docs.map((doc) => ({
       id: doc.id,
       ...doc.data(),
+    }));
+
+    const requestIds = Array.from(
+      new Set(
+        rawPayments
+          .map((payment) => payment.requestId)
+          .filter((requestId): requestId is string => typeof requestId === "string")
+      )
+    );
+    const requestDocs = await Promise.all(
+      requestIds.map((requestId) => requestsRef.doc(requestId).get())
+    );
+    const requestMap = new Map(
+      requestDocs.map((doc) => [doc.id, doc.exists ? doc.data() : undefined])
+    );
+
+    const userIds = Array.from(
+      new Set(
+        rawPayments.flatMap((payment) =>
+          [payment.residentId, payment.workerId].filter(
+            (userId): userId is string => typeof userId === "string"
+          )
+        )
+      )
+    );
+    const userDocs = await Promise.all(
+      userIds.map((userId) => usersRef.doc(userId).get())
+    );
+    const userMap = new Map(
+      userDocs.map((doc) => [doc.id, doc.exists ? doc.data() : undefined])
+    );
+
+    const payments = rawPayments.map((payment) => ({
+      ...payment,
+      resident: buildPartySummary(
+        payment.residentId,
+        userMap.get(payment.residentId)
+      ),
+      worker: buildPartySummary(payment.workerId, userMap.get(payment.workerId)),
+      request: buildRequestSummary(
+        payment.requestId,
+        requestMap.get(payment.requestId)
+      ),
     }));
 
     payments.sort(

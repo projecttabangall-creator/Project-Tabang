@@ -2,7 +2,9 @@ import { useMemo, useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
+  Ban,
   CheckCircle,
+  Clock3,
   XCircle,
   Star,
   Briefcase,
@@ -129,6 +131,38 @@ export function WorkerList() {
     } catch {
       toast.error("Failed to verify worker");
     }
+  }
+
+  function renderWorkerStatus(worker: Worker) {
+    if (worker.accountStatus === "banned") {
+      return (
+        <span className="flex items-center gap-1 text-xs text-red-600 bg-red-50 px-2 py-1 rounded-full">
+          <Ban size={12} /> Banned
+        </span>
+      );
+    }
+
+    if (worker.accountStatus === "suspended") {
+      return (
+        <span className="flex items-center gap-1 text-xs text-yellow-700 bg-yellow-50 px-2 py-1 rounded-full">
+          <Clock3 size={12} /> Suspended
+        </span>
+      );
+    }
+
+    if (worker.isVerified) {
+      return (
+        <span className="flex items-center gap-1 text-xs text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full">
+          <CheckCircle size={12} /> Verified
+        </span>
+      );
+    }
+
+    return (
+      <span className="flex items-center gap-1 text-xs text-yellow-600 bg-yellow-50 px-2 py-1 rounded-full">
+        <XCircle size={12} /> Pending
+      </span>
+    );
   }
 
   if (loading) {
@@ -289,19 +323,10 @@ export function WorkerList() {
               </div>
 
               <div className="flex items-center gap-3">
-                {/* Status badge */}
-                {worker.isVerified ? (
-                  <span className="flex items-center gap-1 text-xs text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full">
-                    <CheckCircle size={12} /> Verified
-                  </span>
-                ) : (
-                  <span className="flex items-center gap-1 text-xs text-yellow-600 bg-yellow-50 px-2 py-1 rounded-full">
-                    <XCircle size={12} /> Pending
-                  </span>
-                )}
+                {renderWorkerStatus(worker)}
 
                 {/* Verify button */}
-                {!worker.isVerified && (
+                {!worker.isVerified && worker.accountStatus === "active" && (
                   <button
                     onClick={(e) => {
                       e.stopPropagation();

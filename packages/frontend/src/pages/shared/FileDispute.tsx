@@ -19,7 +19,8 @@ export function FileDispute() {
   const { userProfile } = useAuth();
   const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [disputeType, setDisputeType] = useState("");
+  const [disputeTypes, setDisputeTypes] = useState<string[]>([]);
+  const [otherDetails, setOtherDetails] = useState("");
   const [description, setDescription] = useState("");
   const [evidenceFiles, setEvidenceFiles] = useState<string[]>([]);
 
@@ -78,11 +79,23 @@ export function FileDispute() {
     setEvidenceFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
+  const hasOtherType = disputeTypes.includes("other");
+
+  function toggleDisputeType(value: string) {
+    setDisputeTypes((prev) =>
+      prev.includes(value) ? prev.filter((item) => item !== value) : [...prev, value]
+    );
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!disputeType) {
-      toast.error("Please select a dispute type");
+    if (disputeTypes.length === 0) {
+      toast.error("Please select at least one dispute type");
+      return;
+    }
+    if (hasOtherType && otherDetails.trim().length < 5) {
+      toast.error("Please provide more details for 'Other'");
       return;
     }
     if (description.length < 10) {
@@ -94,7 +107,8 @@ export function FileDispute() {
     try {
       await api.post("/api/disputes", {
         requestId,
-        disputeType,
+        disputeTypes,
+        otherDetails: otherDetails.trim(),
         description,
         evidenceUrls: evidenceFiles,
       });
@@ -136,23 +150,34 @@ export function FileDispute() {
               <label
                 key={type.value}
                 className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
-                  disputeType === type.value
+                  disputeTypes.includes(type.value)
                     ? "border-primary-300 bg-primary-50"
                     : "border-slate-200 hover:border-slate-300"
                 }`}
               >
                 <input
-                  type="radio"
-                  name="disputeType"
+                  type="checkbox"
+                  name="disputeTypes"
                   value={type.value}
-                  checked={disputeType === type.value}
-                  onChange={(e) => setDisputeType(e.target.value)}
+                  checked={disputeTypes.includes(type.value)}
+                  onChange={() => toggleDisputeType(type.value)}
                   className="accent-primary-600"
                 />
                 <span className="text-sm font-medium">{type.label}</span>
               </label>
             ))}
           </div>
+          {hasOtherType && (
+            <div>
+              <label className="label">Other Dispute Details</label>
+              <textarea
+                placeholder="Describe the other dispute type in sentences or paragraphs..."
+                className="input-field h-24"
+                value={otherDetails}
+                onChange={(e) => setOtherDetails(e.target.value)}
+              />
+            </div>
+          )}
         </div>
 
         {/* Description */}

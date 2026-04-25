@@ -3,14 +3,15 @@ import { AuthenticatedRequest } from "../middleware/auth";
 import { auth, db } from "../config/firebase";
 import { FieldValue, GeoPoint, Timestamp } from "firebase-admin/firestore";
 import {
+  buildPreferredAuthEmail,
   canUploadMultipleWorkerCredentials,
   DEFAULT_CREDIT_POINTS,
   getWorkerCredentialLabel,
   isWorkerCredentialType,
+  normalizePhilippinePhoneNumber,
   RegisterWorkerInput,
   ROLES,
 } from "@tabang/shared";
-import { attemptRequestAssignment } from "../services/requestAssignment.service";
 
 const usersRef = db.collection("users");
 const CONTACT_ALREADY_REGISTERED_ERROR = "Contact number already registered";
@@ -18,10 +19,6 @@ const CONTACT_ALREADY_REGISTERED_ERROR = "Contact number already registered";
 function toSpecArray(val: string | string[] | undefined): string[] {
   if (!val) return [];
   return Array.isArray(val) ? val : [val];
-}
-
-function buildAuthEmail(contactNumber: string): string {
-  return `${contactNumber.trim().replace(/\+/g, "")}@tabang.local`;
 }
 
 interface WorkerCredentialInput {
@@ -159,13 +156,15 @@ function buildWorkerUserData(
     lastName: body.lastName,
     middleInitial: body.middleInitial || "",
     birthday: body.birthday,
-    contactNumber: body.contactNumber.trim(),
+    contactNumber: normalizePhilippinePhoneNumber(body.contactNumber, "local"),
     email: body.email || "",
     address: body.address,
     creditPoints: DEFAULT_CREDIT_POINTS,
     isVerified: false,
     isActive: false,
     accountStatus: "active",
+    mustChangePassword: true,
+    tempPasswordIssuedAt: now,
     otpVerified: false,
     failedLoginAttempts: 0,
     createdAt: now,
@@ -209,8 +208,11 @@ export async function registerWorker(
   res: Response
 ): Promise<void> {
   const body = req.body as RegisterWorkerInput;
-  const normalizedContactNumber = body.contactNumber.trim();
-  const email = buildAuthEmail(normalizedContactNumber);
+  const normalizedContactNumber = normalizePhilippinePhoneNumber(
+    body.contactNumber,
+    "local"
+  );
+  const email = buildPreferredAuthEmail(normalizedContactNumber);
   const displayName = `${body.firstName} ${body.lastName}`;
   const normalizedCredentials = parseWorkerCredentials(body.credentials || []);
 
@@ -558,36 +560,7 @@ export async function toggleAvailability(
 
     await docRef.update(updateData);
 
-    // If turning availability ON, scan for pending requests in this worker's categories
-    if (newAvailability) {
-      const workerData = doc.data()!.workerData;
-      const specs = toSpecArray(workerData?.specialization);
-
-      if (specs.length > 0) {
-        const pendingSnaps = await Promise.all(
-          specs.map((categoryId) =>
-            db
-              .collection("serviceRequests")
-              .where("categoryId", "==", categoryId)
-              .where("status", "==", "pending")
-              .where("assignedWorkerId", "==", null)
-              .get()
-          )
-        );
-        const pendingRequests = pendingSnaps.flatMap((s) => s.docs);
-
-        for (const requestDoc of pendingRequests) {
-          try {
-            await attemptRequestAssignment(requestDoc.id, requestDoc.data());
-          } catch (assignmentError) {
-            console.error(
-              `Failed to reassign pending request ${requestDoc.id}:`,
-              assignmentError
-            );
-          }
-        }
-      }
-    }
+    // Pending-request scan is handled centrally by onUserUpdated Firestore trigger
 
     res.json({ isAvailable: newAvailability });
   } catch (error) {
@@ -627,42 +600,8 @@ export async function updateSchedule(
       updatedAt: FieldValue.serverTimestamp(),
     });
 
-    // Respond immediately — the save succeeded
+    // Pending-request scan is handled centrally by onUserUpdated Firestore trigger
     res.json({ message: "Schedule updated", availability });
-
-    // Fire-and-forget: scan for pending requests in the background
-    // Errors here must not affect the response already sent above
-    const workerData = doc.data()!.workerData;
-    const specs = toSpecArray(workerData?.specialization);
-    const isWorkerAvailable = workerData?.isAvailable;
-
-    if (specs.length > 0 && isWorkerAvailable) {
-      Promise.all(
-        specs.map((categoryId) =>
-          db
-            .collection("serviceRequests")
-            .where("categoryId", "==", categoryId)
-            .where("status", "==", "pending")
-            .where("assignedWorkerId", "==", null)
-            .get()
-        )
-      )
-        .then((snaps) => {
-          const pendingRequests = snaps.flatMap((s) => s.docs);
-          for (const requestDoc of pendingRequests) {
-            attemptRequestAssignment(requestDoc.id, requestDoc.data()).catch(
-              (assignmentError) =>
-                console.error(
-                  `Failed to reassign pending request ${requestDoc.id}:`,
-                  assignmentError
-                )
-            );
-          }
-        })
-        .catch((err) =>
-          console.error("Schedule scan for pending requests failed:", err)
-        );
-    }
   } catch (error) {
     console.error("Update schedule error:", error);
     res.status(500).json({ error: "Failed to update schedule" });

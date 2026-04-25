@@ -2,7 +2,10 @@
   "permissions": {
     "allow": [
       "Bash(firebase --version)",
-      "Bash(firebase projects:list)"
+      "Bash(firebase projects:list)",
+      "Read(//c/Users/Gio Kyle Libosada/OneDrive/Documents/Project Tabang - Claire Code/packages/frontend/src/pages/resident/**)",
+      "Bash(git add *)",
+      "Bash(git commit -m 'Fix dispute filing — remove compound != Firestore query *)"
     ]
   }
 }

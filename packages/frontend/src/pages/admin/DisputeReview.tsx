@@ -15,7 +15,23 @@ interface Dispute {
   requestId: string;
   filedBy: string;
   filedAgainst: string;
+  filedByUser?: {
+    userId: string;
+    role: string;
+    firstName: string;
+    lastName: string;
+    fullName: string;
+  };
+  filedAgainstUser?: {
+    userId: string;
+    role: string;
+    firstName: string;
+    lastName: string;
+    fullName: string;
+  };
   disputeType: string;
+  disputeTypes?: string[];
+  otherDetails?: string;
   description: string;
   evidenceUrls: string[];
   status: string;
@@ -32,6 +48,33 @@ const RESOLUTION_OPTIONS = [
   { value: "partial", label: "Partial (Both Parties)" },
   { value: "escalated", label: "Escalated" },
 ];
+
+function formatPartyLabel(
+  fallbackLabel: string,
+  party?: Dispute["filedByUser"]
+) {
+  if (!party) {
+    return `${fallbackLabel}`;
+  }
+
+  const roleLabel =
+    party.role === "resident" || party.role === "worker" || party.role === "admin"
+      ? party.role[0].toUpperCase() + party.role.slice(1)
+      : "User";
+
+  return `${fallbackLabel}: ${party.fullName} (${roleLabel})`;
+}
+
+function getDisputeTypes(dispute: Dispute) {
+  if (Array.isArray(dispute.disputeTypes) && dispute.disputeTypes.length > 0) {
+    return dispute.disputeTypes;
+  }
+  return dispute.disputeType ? [dispute.disputeType] : [];
+}
+
+function formatDisputeTypeLabel(type: string) {
+  return type.replace(/_/g, " ");
+}
 
 export function DisputeReview() {
   const [isLoading, setIsLoading] = useState(true);
@@ -188,13 +231,18 @@ export function DisputeReview() {
                       <p className="font-semibold">
                         Dispute #{dispute.id.slice(-6)}
                       </p>
-                      <span
-                        className={`text-xs font-medium px-2 py-0.5 rounded ${getTypeBadgeColor(
-                          dispute.disputeType
-                        )}`}
-                      >
-                        {dispute.disputeType.replace(/_/g, " ")}
-                      </span>
+                      <div className="flex flex-wrap gap-2">
+                        {getDisputeTypes(dispute).map((type) => (
+                          <span
+                            key={type}
+                            className={`text-xs font-medium px-2 py-0.5 rounded ${getTypeBadgeColor(
+                              type
+                            )}`}
+                          >
+                            {formatDisputeTypeLabel(type)}
+                          </span>
+                        ))}
+                      </div>
                     </div>
                     <p className="text-xs text-slate-500">
                       Request: {dispute.requestId.slice(-8)}
@@ -225,8 +273,8 @@ export function DisputeReview() {
                 </p>
 
                 <div className="flex gap-4 mt-2 text-xs text-slate-500">
-                  <span>Filed by: {dispute.filedBy.slice(-6)}</span>
-                  <span>Against: {dispute.filedAgainst.slice(-6)}</span>
+                  <span>{formatPartyLabel("Filed by", dispute.filedByUser)}</span>
+                  <span>{formatPartyLabel("Against", dispute.filedAgainstUser)}</span>
                 </div>
               </button>
 
@@ -241,18 +289,31 @@ export function DisputeReview() {
                     <p className="text-sm text-slate-700">{dispute.description}</p>
                   </div>
 
+                  {dispute.disputeTypes?.includes("other") && dispute.otherDetails ? (
+                    <div>
+                      <h4 className="text-sm font-semibold mb-1">Other Details</h4>
+                      <p className="text-sm text-slate-700">{dispute.otherDetails}</p>
+                    </div>
+                  ) : null}
+
                   {/* Parties */}
                   <div className="grid grid-cols-2 gap-3">
                     <div className="bg-slate-50 rounded-lg p-3">
                       <p className="text-xs text-slate-600">Filed By</p>
-                      <p className="text-sm font-medium font-mono">
-                        {dispute.filedBy.slice(-8)}
+                      <p className="text-sm font-medium">
+                        {dispute.filedByUser?.fullName || dispute.filedBy.slice(-8)}
+                      </p>
+                      <p className="text-xs text-slate-500 mt-1">
+                        {dispute.filedByUser?.role || "unknown"}
                       </p>
                     </div>
                     <div className="bg-slate-50 rounded-lg p-3">
                       <p className="text-xs text-slate-600">Filed Against</p>
-                      <p className="text-sm font-medium font-mono">
-                        {dispute.filedAgainst.slice(-8)}
+                      <p className="text-sm font-medium">
+                        {dispute.filedAgainstUser?.fullName || dispute.filedAgainst.slice(-8)}
+                      </p>
+                      <p className="text-xs text-slate-500 mt-1">
+                        {dispute.filedAgainstUser?.role || "unknown"}
                       </p>
                     </div>
                   </div>
@@ -353,7 +414,7 @@ export function DisputeReview() {
                         <div className="grid grid-cols-2 gap-3">
                           <div>
                             <p className="text-xs text-slate-600 mb-1">
-                              Filer ({dispute.filedBy.slice(-6)})
+                              {formatPartyLabel("Filer", dispute.filedByUser)}
                             </p>
                             <select
                               className="input-field"
@@ -370,7 +431,7 @@ export function DisputeReview() {
                           </div>
                           <div>
                             <p className="text-xs text-slate-600 mb-1">
-                              Accused ({dispute.filedAgainst.slice(-6)})
+                              {formatPartyLabel("Accused", dispute.filedAgainstUser)}
                             </p>
                             <select
                               className="input-field"

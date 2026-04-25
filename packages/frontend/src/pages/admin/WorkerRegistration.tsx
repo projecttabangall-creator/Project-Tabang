@@ -2,10 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { Upload, X, Fingerprint, FileCheck, Plus } from "lucide-react";
+import { Upload, X, Fingerprint, FileCheck, Plus, ScrollText } from "lucide-react";
 import api from "@/services/api";
 import { uploadFile } from "@/utils/uploadFile";
 import { BackButton } from "@/components/common/BackButton";
+import { WorkerTermsContent } from "@/components/common/WorkerTermsContent";
 import {
   WorkerCredentialDraft,
   createWorkerCredentialDraft,
@@ -39,6 +40,7 @@ interface Category {
 export function WorkerRegistration() {
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
+  const [showTerms, setShowTerms] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
   const [credentialDrafts, setCredentialDrafts] = useState<WorkerCredentialDraft[]>(
     []
@@ -591,7 +593,7 @@ export function WorkerRegistration() {
               </p>
             )}
             <p className="text-xs text-slate-400 mt-1">
-              Share this with the worker. They can change it after first login.
+              Share this with the worker. They will be required to change it on first login.
             </p>
           </div>
 
@@ -606,9 +608,13 @@ export function WorkerRegistration() {
               />
               <span className="text-sm text-slate-700">
                 Worker has read and accepted the{" "}
-                <span className="text-primary-600 font-medium">
+                <button
+                  type="button"
+                  onClick={() => setShowTerms(true)}
+                  className="text-primary-600 font-medium underline underline-offset-2 hover:text-primary-700"
+                >
                   Terms and Conditions
-                </span>
+                </button>
               </span>
             </label>
             {errors.termsAccepted && (
@@ -629,6 +635,39 @@ export function WorkerRegistration() {
           </div>
         </form>
       </div>
+
+      {/* Terms and Conditions Modal */}
+      {showTerms && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh]">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 shrink-0">
+              <div className="flex items-center gap-2 text-slate-800">
+                <ScrollText size={18} className="text-primary-600" />
+                <h3 className="font-bold text-lg">Worker Terms and Conditions</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowTerms(false)}
+                className="text-slate-400 hover:text-slate-600 transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="overflow-y-auto px-6 py-4 flex-1">
+              <WorkerTermsContent />
+            </div>
+            <div className="px-6 py-4 border-t border-slate-200 shrink-0">
+              <button
+                type="button"
+                onClick={() => setShowTerms(false)}
+                className="btn-primary w-full"
+              >
+                I Have Read the Terms
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

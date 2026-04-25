@@ -21,6 +21,6 @@
     "deploy": "npm run build && firebase deploy"
   },
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=22.0.0"
   }
 }

@@ -5,12 +5,19 @@
  * Usage:
  *   1. Download a service account key from Firebase Console:
  *      Project Settings → Service Accounts → Generate new private key
- *   2. Save it as: service-account.json (in the project root)
+ *   2. Save it OUTSIDE the project directory and set env var:
+ *        export GOOGLE_APPLICATION_CREDENTIALS=/absolute/path/to/service-account.json
+ *      (Keeping it outside the repo prevents it from being bundled into
+ *       the Firebase Cloud Function deploy source.)
  *   3. Copy scripts/.env.seed.example to scripts/.env.seed and fill in passwords
  *   4. Run: node scripts/seed-production.js
+ *   5. DELETE the service-account.json file after seeding is done.
  *
  * WARNING: This runs against PRODUCTION Firebase. Only run once.
  * NEVER commit .env.seed — it is listed in .gitignore.
+ * NEVER place service-account.json in the project root — it would be
+ * included in the Firebase Functions deploy bundle (.firebaseignore guards
+ * against this but the safest path is to keep it outside the repo entirely).
  */
 
 const path = require("path");
@@ -45,11 +52,40 @@ if (!SUPERADMIN_PASSWORD || !ADMIN_PASSWORD || !WORKER_PASSWORD || !RESIDENT_PAS
   process.exit(1);
 }
 
-// Look for service account key in project root
-const keyPath = path.resolve(__dirname, "../service-account.json");
-if (!fs.existsSync(keyPath)) {
-  console.error("ERROR: service-account.json not found at project root.");
-  console.error("Download it from: Firebase Console → Project Settings → Service Accounts → Generate new private key");
+// Prefer GOOGLE_APPLICATION_CREDENTIALS (pointing outside the repo).
+// Fall back to project-root service-account.json for legacy usage, but warn.
+const envKeyPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+const legacyKeyPath = path.resolve(__dirname, "../service-account.json");
+
+let keyPath;
+if (envKeyPath && fs.existsSync(envKeyPath)) {
+  keyPath = envKeyPath;
+} else if (fs.existsSync(legacyKeyPath)) {
+  keyPath = legacyKeyPath;
+  console.warn(
+    "WARNING: Using service-account.json from project root. This is risky:"
+  );
+  console.warn(
+    "  - If you run `firebase deploy` while this file exists, the admin key"
+  );
+  console.warn(
+    "    may be bundled into the Cloud Function source (.firebaseignore"
+  );
+  console.warn("    now excludes it, but prefer keeping it outside the repo).");
+  console.warn(
+    "  - Set GOOGLE_APPLICATION_CREDENTIALS to a path OUTSIDE the repo instead."
+  );
+} else {
+  console.error("ERROR: service account key not found.");
+  console.error(
+    "Set GOOGLE_APPLICATION_CREDENTIALS to the absolute path of your key file (recommended),"
+  );
+  console.error(
+    "or place service-account.json at the project root (NOT recommended)."
+  );
+  console.error(
+    "Download the key from: Firebase Console → Project Settings → Service Accounts → Generate new private key"
+  );
   process.exit(1);
 }
 

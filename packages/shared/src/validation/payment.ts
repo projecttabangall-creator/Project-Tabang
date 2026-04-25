@@ -13,15 +13,28 @@ export const rejectPaymentSchema = z.object({
 
 export const fileDisputeSchema = z.object({
   requestId: z.string().min(1, "Request ID is required"),
-  disputeType: z.enum([
-    "work_quality",
-    "payment",
-    "no_show",
-    "behavior_safety",
-    "other",
-  ]),
+  disputeTypes: z
+    .array(
+      z.enum([
+        "work_quality",
+        "payment",
+        "no_show",
+        "behavior_safety",
+        "other",
+      ])
+    )
+    .min(1, "Select at least one dispute type"),
+  otherDetails: z.string().optional().default(""),
   description: z.string().min(10, "Description must be at least 10 characters"),
   evidenceUrls: z.array(z.string()).optional().default([]),
+}).superRefine((data, ctx) => {
+  if (data.disputeTypes.includes("other") && !data.otherDetails?.trim()) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["otherDetails"],
+      message: "Please provide details for the 'Other' dispute type",
+    });
+  }
 });
 
 export const resolveDisputeSchema = z.object({

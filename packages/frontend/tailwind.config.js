@@ -36,6 +36,15 @@ export default {
         sans: ['"DM Sans"', "system-ui", "sans-serif"],
         display: ['"Plus Jakarta Sans"', '"DM Sans"', "system-ui", "sans-serif"],
       },
+      animation: {
+        "tip-glow": "tip-glow 2.5s ease-in-out infinite",
+      },
+      keyframes: {
+        "tip-glow": {
+          "0%, 100%": { boxShadow: "0 0 16px 2px rgba(251, 191, 36, 0.45)" },
+          "50%": { boxShadow: "0 0 22px 4px rgba(251, 191, 36, 0.70)" },
+        },
+      },
     },
   },
   plugins: [],

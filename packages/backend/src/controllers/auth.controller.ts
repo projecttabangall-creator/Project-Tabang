@@ -1,61 +1,106 @@
 import { Request, Response } from "express";
-import { createHash } from "crypto";
 import { auth, db } from "../config/firebase";
 import { AuthenticatedRequest } from "../middleware/auth";
 import {
-  RegisterResidentInput,
-  LoginInput,
-  VerifyOtpInput,
+  buildAuthEmailCandidates,
+  buildPreferredAuthEmail,
+  ChangePasswordInput,
   DEFAULT_CREDIT_POINTS,
+  getPhilippinePhoneCandidates,
+  LoginInput,
+  normalizePhilippinePhoneNumber,
+  RequestPasswordResetInput,
+  RegisterResidentInput,
   ROLES,
 } from "@tabang/shared";
-import { FieldValue, Timestamp } from "firebase-admin/firestore";
+import { FieldValue } from "firebase-admin/firestore";
 
-function hashOtp(otp: string): string {
-  return createHash("sha256").update(otp).digest("hex");
+async function findUserByContactNumber(contactNumber: string) {
+  const candidates = getPhilippinePhoneCandidates(contactNumber);
+
+  if (candidates.length > 1) {
+    const snapshot = await db
+      .collection("users")
+      .where("contactNumber", "in", candidates)
+      .limit(1)
+      .get();
+
+    return snapshot.empty ? null : snapshot.docs[0];
+  }
+
+  const snapshot = await db
+    .collection("users")
+    .where("contactNumber", "==", candidates[0] || contactNumber.trim())
+    .limit(1)
+    .get();
+
+  return snapshot.empty ? null : snapshot.docs[0];
 }
 
-/**
- * POST /api/auth/register
- * Register a new resident account.
- */
+async function getAuthUserByAnyEmail(contactNumber: string) {
+  for (const email of buildAuthEmailCandidates(contactNumber)) {
+    try {
+      return await auth.getUserByEmail(email);
+    } catch (error: any) {
+      if (error.code !== "auth/user-not-found") {
+        throw error;
+      }
+    }
+  }
+
+  return null;
+}
+
 export async function registerResident(
   req: Request,
   res: Response
 ): Promise<void> {
   const body = req.body as RegisterResidentInput;
+  const normalizedContactNumber = normalizePhilippinePhoneNumber(
+    body.contactNumber,
+    "local"
+  );
 
-  if (!body.contactNumber || body.contactNumber.trim() === "") {
+  if (!normalizedContactNumber) {
     res.status(400).json({ error: "Contact number is required" });
     return;
   }
 
   try {
-    // Check if contact number already exists
-    const existingUser = await db
-      .collection("users")
-      .where("contactNumber", "==", body.contactNumber)
-      .limit(1)
-      .get();
-
-    if (!existingUser.empty) {
+    const existingUser = await findUserByContactNumber(normalizedContactNumber);
+    if (existingUser) {
       res.status(409).json({ error: "Contact number already registered" });
       return;
     }
 
-    // Create Firebase Auth user
-    // Using email format as workaround: contactNumber@tabang.local
-    const email = `${body.contactNumber.replace(/\+/g, "")}@tabang.local`;
-    const userRecord = await auth.createUser({
-      email,
-      password: body.password,
-      displayName: `${body.firstName} ${body.lastName}`,
-    });
+    const existingAuthUser = await getAuthUserByAnyEmail(normalizedContactNumber);
+    if (existingAuthUser) {
+      const linkedFirestoreUser = await db
+        .collection("users")
+        .doc(existingAuthUser.uid)
+        .get();
 
-    // Set custom claims for role
+      if (linkedFirestoreUser.exists) {
+        res.status(409).json({ error: "Contact number already registered" });
+        return;
+      }
+    }
+
+    const email = buildPreferredAuthEmail(normalizedContactNumber);
+    const userRecord = existingAuthUser
+      ? await auth.updateUser(existingAuthUser.uid, {
+          email,
+          password: body.password,
+          displayName: `${body.firstName} ${body.lastName}`,
+        })
+      : await auth.createUser({
+          email,
+          password: body.password,
+          displayName: `${body.firstName} ${body.lastName}`,
+        });
+
     await auth.setCustomUserClaims(userRecord.uid, { role: ROLES.RESIDENT });
 
-    // Create user document in Firestore (auto-verified — OTP skipped)
     const now = FieldValue.serverTimestamp();
     await db.collection("users").doc(userRecord.uid).set({
       uid: userRecord.uid,
@@ -63,7 +108,7 @@ export async function registerResident(
       firstName: body.firstName,
       lastName: body.lastName,
       middleInitial: body.middleInitial || "",
-      contactNumber: body.contactNumber,
+      contactNumber: normalizedContactNumber,
       address: body.address,
       creditPoints: DEFAULT_CREDIT_POINTS,
       isVerified: true,
@@ -76,7 +121,7 @@ export async function registerResident(
     });
 
     res.status(201).json({
-      message: "Registration successful.",
+      message: "Registration successful. You can now sign in.",
       uid: userRecord.uid,
     });
   } catch (error: any) {
@@ -85,112 +130,52 @@ export async function registerResident(
       res.status(409).json({ error: "Contact number already registered" });
       return;
     }
-    res.status(500).json({ error: "Registration failed" });
-  }
-}
-
-/**
- * POST /api/auth/verify-otp
- * Verify OTP and activate account.
- */
-export async function verifyOtp(req: Request, res: Response): Promise<void> {
-  const body = req.body as VerifyOtpInput;
-
-  try {
-    // Find user by contact number
-    const userQuery = await db
-      .collection("users")
-      .where("contactNumber", "==", body.contactNumber)
-      .limit(1)
-      .get();
-
-    if (userQuery.empty) {
-      res.status(404).json({ error: "User not found" });
-      return;
-    }
-
-    const userDoc = userQuery.docs[0];
-    const userId = userDoc.id;
-
-    // Get stored OTP
-    const otpDoc = await db.collection("otps").doc(userId).get();
-    if (!otpDoc.exists) {
-      res.status(400).json({ error: "No OTP found. Please request a new one." });
-      return;
-    }
-
-    const otpData = otpDoc.data()!;
-
-    // Check expiry
-    const expiresAt = otpData.expiresAt.toDate
-      ? otpData.expiresAt.toDate()
-      : new Date(otpData.expiresAt);
-    if (new Date() > expiresAt) {
-      res.status(400).json({ error: "OTP has expired. Please request a new one." });
-      return;
-    }
-
-    // Check OTP match against stored hash
-    if (otpData.otpHash !== hashOtp(body.otp)) {
-      res.status(400).json({ error: "Invalid OTP" });
-      return;
-    }
-
-    // Activate account
-    await db.collection("users").doc(userId).update({
-      isVerified: true,
-      otpVerified: true,
-      updatedAt: FieldValue.serverTimestamp(),
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Registration failed",
     });
-
-    // Clean up OTP
-    await db.collection("otps").doc(userId).delete();
-
-    res.json({ message: "Account verified successfully" });
-  } catch (error) {
-    console.error("OTP verification error:", error);
-    res.status(500).json({ error: "Verification failed" });
   }
 }
 
-/**
- * POST /api/auth/login
- * Login with contact number and password.
- * Returns a custom token for the client to exchange for an ID token.
- */
+export async function verifyOtp(_req: Request, res: Response): Promise<void> {
+  res.status(410).json({
+    error: "OTP verification is no longer available.",
+  });
+}
+
+export async function resendOtp(_req: Request, res: Response): Promise<void> {
+  res.status(410).json({
+    error: "OTP resend is no longer available.",
+  });
+}
+
 export async function login(req: Request, res: Response): Promise<void> {
   const body = req.body as LoginInput;
+  const normalizedContactNumber = normalizePhilippinePhoneNumber(
+    body.contactNumber,
+    "local"
+  );
 
-  if (!body.contactNumber || body.contactNumber.trim() === "") {
+  if (!normalizedContactNumber) {
     res.status(400).json({ error: "Contact number is required" });
     return;
   }
 
   try {
-    // Find user by contact number
-    const userQuery = await db
-      .collection("users")
-      .where("contactNumber", "==", body.contactNumber)
-      .limit(1)
-      .get();
+    const userDoc = await findUserByContactNumber(normalizedContactNumber);
 
-    if (userQuery.empty) {
+    if (!userDoc) {
       res.status(401).json({ error: "Invalid contact number or password" });
       return;
     }
 
-    const userDoc = userQuery.docs[0];
     const userData = userDoc.data();
 
-    // Check account status
     if (userData.accountStatus === "suspended") {
-      // Check if timed suspension has expired
       if (userData.suspendUntil) {
         const suspendUntil = userData.suspendUntil.toDate
           ? userData.suspendUntil.toDate()
           : new Date(userData.suspendUntil);
         if (new Date() >= suspendUntil) {
-          // Auto-lift expired suspension
           await userDoc.ref.update({
             accountStatus: "active",
             isActive: true,
@@ -199,7 +184,6 @@ export async function login(req: Request, res: Response): Promise<void> {
             suspendUntil: FieldValue.delete(),
             updatedAt: FieldValue.serverTimestamp(),
           });
-          // Fall through to allow login
         } else {
           res.status(403).json({
             error: "Account is suspended",
@@ -209,7 +193,6 @@ export async function login(req: Request, res: Response): Promise<void> {
           return;
         }
       } else {
-        // Indefinite suspension (credit-system or manual without duration)
         res.status(403).json({
           error: "Account is suspended",
           suspendReason: userData.suspendReason ?? null,
@@ -217,12 +200,12 @@ export async function login(req: Request, res: Response): Promise<void> {
         return;
       }
     }
+
     if (userData.accountStatus === "banned") {
       res.status(403).json({ error: "Account is banned" });
       return;
     }
 
-    // Check if account is locked
     if (userData.lockedUntil) {
       const lockExpiry = userData.lockedUntil.toDate
         ? userData.lockedUntil.toDate()
@@ -235,12 +218,6 @@ export async function login(req: Request, res: Response): Promise<void> {
       }
     }
 
-    // Note: Password verification is handled by Firebase Auth on the client side
-    // using signInWithEmailAndPassword. The backend generates a custom token
-    // that the client can use if needed, but the primary auth flow uses
-    // Firebase client SDK directly.
-
-    // Create custom token with role claim
     const customToken = await auth.createCustomToken(userDoc.id, {
       role: userData.role,
     });
@@ -254,6 +231,7 @@ export async function login(req: Request, res: Response): Promise<void> {
         lastName: userData.lastName,
         isVerified: userData.isVerified,
         contactNumber: userData.contactNumber,
+        mustChangePassword: Boolean(userData.mustChangePassword),
       },
     });
   } catch (error) {
@@ -262,115 +240,139 @@ export async function login(req: Request, res: Response): Promise<void> {
   }
 }
 
-/**
- * POST /api/auth/reset-password
- * Send OTP for password reset.
- */
-export async function resetPassword(
+export async function requestPasswordReset(
   req: Request,
   res: Response
 ): Promise<void> {
-  const { contactNumber } = req.body;
+  const body = req.body as RequestPasswordResetInput;
+  const normalizedContactNumber = normalizePhilippinePhoneNumber(
+    body.contactNumber,
+    "local"
+  );
 
   try {
-    const userQuery = await db
-      .collection("users")
-      .where("contactNumber", "==", contactNumber)
+    const matchedUser = await findUserByContactNumber(normalizedContactNumber);
+    const existingPending = await db
+      .collection("passwordResetRequests")
+      .where("contactNumber", "==", normalizedContactNumber)
+      .where("status", "==", "pending")
       .limit(1)
       .get();
 
-    if (userQuery.empty) {
-      // Don't reveal whether the number exists
-      res.json({ message: "If the number is registered, an OTP has been sent." });
+    if (!existingPending.empty) {
+      res.json({
+        message: "Your password reset request is already pending review.",
+      });
       return;
     }
 
-    const userId = userQuery.docs[0].id;
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
-
-    await db.collection("otps").doc(userId).set({
-      otpHash: hashOtp(otp),
-      expiresAt: otpExpiry,
-      contactNumber,
-      type: "password_reset",
-      createdAt: new Date(),
+    const requestRef = await db.collection("passwordResetRequests").add({
+      firstName: body.firstName.trim(),
+      lastName: body.lastName.trim(),
+      fullName: `${body.firstName.trim()} ${body.lastName.trim()}`.trim(),
+      role: body.role,
+      contactNumber: normalizedContactNumber,
+      note: body.note?.trim() || "",
+      matchedUserId: matchedUser?.id || null,
+      matchedUserRole: matchedUser?.data().role || null,
+      status: "pending",
+      requestedAt: FieldValue.serverTimestamp(),
+      resolvedAt: null,
+      resolvedBy: null,
+      resolutionNote: "",
+      tempPasswordIssuedAt: null,
     });
 
-    console.log(`[DEV] Password reset OTP for ${contactNumber}: ${otp}`);
+    const adminSnapshot = await db
+      .collection("users")
+      .where("role", "in", ["admin", "superadmin"])
+      .get();
+
+    const notificationBatch = db.batch();
+    const fullName = `${body.firstName.trim()} ${body.lastName.trim()}`.trim();
+    const notificationBody = `${fullName} (${body.role}) requested a password reset for ${normalizedContactNumber}.`;
+
+    for (const adminDoc of adminSnapshot.docs) {
+      const adminData = adminDoc.data();
+      if (adminData.accountStatus && adminData.accountStatus !== "active") {
+        continue;
+      }
+
+      const notificationRef = db.collection("notifications").doc();
+      notificationBatch.set(notificationRef, {
+        userId: adminDoc.id,
+        type: "system",
+        title: "Password reset request submitted",
+        body: notificationBody,
+        referenceType: "password_reset",
+        referenceId: requestRef.id,
+        isRead: false,
+        createdAt: FieldValue.serverTimestamp(),
+      });
+    }
+
+    await notificationBatch.commit();
 
     res.json({
-      message: "If the number is registered, an OTP has been sent.",
-      ...(process.env.FUNCTIONS_EMULATOR === "true" && { devOtp: otp }),
+      message:
+        "Your password reset request has been submitted for admin review.",
     });
   } catch (error) {
-    console.error("Reset password error:", error);
-    res.status(500).json({ error: "Password reset failed" });
+    console.error("Password reset request error:", error);
+    res.status(500).json({ error: "Failed to submit password reset request" });
   }
 }
 
-/**
- * POST /api/auth/reset-password/confirm
- * Confirm password reset with OTP.
- */
-export async function confirmResetPassword(
-  req: Request,
+export async function resetPassword(
+  _req: Request,
   res: Response
 ): Promise<void> {
-  const { contactNumber, otp, newPassword } = req.body;
+  res.status(410).json({
+    error:
+      "Password reset by SMS is currently unavailable. Please contact an administrator.",
+  });
+}
+
+export async function confirmResetPassword(
+  _req: Request,
+  res: Response
+): Promise<void> {
+  res.status(410).json({
+    error:
+      "Password reset by SMS is currently unavailable. Please contact an administrator.",
+  });
+}
+
+export async function changePassword(
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> {
+  const body = req.body as ChangePasswordInput;
 
   try {
-    const userQuery = await db
-      .collection("users")
-      .where("contactNumber", "==", contactNumber)
-      .limit(1)
-      .get();
+    await auth.updateUser(req.user!.uid, { password: body.newPassword });
 
-    if (userQuery.empty) {
-      res.status(404).json({ error: "User not found" });
-      return;
-    }
+    await db.collection("users").doc(req.user!.uid).update({
+      mustChangePassword: false,
+      passwordChangedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
 
-    const userId = userQuery.docs[0].id;
-    const otpDoc = await db.collection("otps").doc(userId).get();
+    await db.collection("systemLogs").add({
+      action: "password_changed",
+      performedBy: req.user!.uid,
+      targetUserId: req.user!.uid,
+      details: "User changed password after login",
+      createdAt: FieldValue.serverTimestamp(),
+    });
 
-    if (!otpDoc.exists) {
-      res.status(400).json({ error: "No OTP found" });
-      return;
-    }
-
-    const otpData = otpDoc.data()!;
-    const expiresAt = otpData.expiresAt.toDate
-      ? otpData.expiresAt.toDate()
-      : new Date(otpData.expiresAt);
-
-    if (new Date() > expiresAt) {
-      res.status(400).json({ error: "OTP has expired" });
-      return;
-    }
-
-    if (otpData.otpHash !== hashOtp(otp)) {
-      res.status(400).json({ error: "Invalid OTP" });
-      return;
-    }
-
-    // Update password in Firebase Auth
-    await auth.updateUser(userId, { password: newPassword });
-
-    // Clean up OTP
-    await db.collection("otps").doc(userId).delete();
-
-    res.json({ message: "Password reset successful" });
+    res.json({ message: "Password changed successfully" });
   } catch (error) {
-    console.error("Confirm reset password error:", error);
-    res.status(500).json({ error: "Password reset failed" });
+    console.error("Change password error:", error);
+    res.status(500).json({ error: "Failed to change password" });
   }
 }
 
-/**
- * PATCH /api/auth/profile
- * Update current user's profile (profilePhotoUrl, email).
- */
 export async function updateProfile(
   req: AuthenticatedRequest,
   res: Response
@@ -393,10 +395,6 @@ export async function updateProfile(
   }
 }
 
-/**
- * GET /api/auth/me
- * Get current authenticated user's profile.
- */
 export async function getCurrentUser(
   req: AuthenticatedRequest,
   res: Response
@@ -410,7 +408,6 @@ export async function getCurrentUser(
     }
 
     const userData = userDoc.data()!;
-    // Remove sensitive fields
     const { failedLoginAttempts, lockedUntil, ...safeData } = userData;
 
     res.json({ user: { id: userDoc.id, ...safeData } });

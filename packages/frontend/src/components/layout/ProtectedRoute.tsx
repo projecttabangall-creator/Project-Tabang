@@ -1,4 +1,4 @@
-import { Navigate, Outlet } from "react-router-dom";
+import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { UserRole } from "@tabang/shared";
 
@@ -8,6 +8,7 @@ interface ProtectedRouteProps {
 
 export function ProtectedRoute({ allowedRoles }: ProtectedRouteProps) {
   const { firebaseUser, userProfile, loading } = useAuth();
+  const location = useLocation();
 
   if (loading) {
     return (
@@ -22,11 +23,6 @@ export function ProtectedRoute({ allowedRoles }: ProtectedRouteProps) {
     return <Navigate to="/login" replace />;
   }
 
-  // Not verified
-  if (!userProfile.isVerified && userProfile.role === "resident") {
-    return <Navigate to="/verify-otp" replace />;
-  }
-
   // Role check
   if (allowedRoles && !allowedRoles.includes(userProfile.role)) {
     // Redirect to their role's home page
@@ -37,6 +33,10 @@ export function ProtectedRoute({ allowedRoles }: ProtectedRouteProps) {
       superadmin: "/superadmin/dashboard",
     };
     return <Navigate to={roleHome[userProfile.role] ?? "/"} replace />;
+  }
+
+  if (userProfile.mustChangePassword && location.pathname !== "/change-password") {
+    return <Navigate to="/change-password" replace />;
   }
 
   return <Outlet />;

@@ -57,15 +57,15 @@ export function Landing() {
             Connect with Skilled Local Workers
           </h2>
           <p className="text-xl text-slate-200 mb-8 max-w-2xl mx-auto">
-            Project Tabang bridges residents with certified service workers in your barangay.
+            Project Tabang bridges residents with verified service workers in your barangay.
             Get quality work done. Fair pricing. Local support.
           </p>
-          <div className="flex gap-4 justify-center">
+          <div className="flex flex-wrap gap-4 justify-center">
             <Link to="/register" className="btn-primary">
               Register as Resident
             </Link>
             <Link
-              to="/register"
+              to="/apply-worker"
               className="px-6 py-3 border-2 border-white text-white font-medium rounded-lg hover:bg-white/10 transition-colors"
             >
               Apply as Worker
@@ -173,7 +173,7 @@ export function Landing() {
       {/* For Residents */}
       <section className="bg-primary-50 py-16">
         <div className="max-w-4xl mx-auto px-4">
-          <div className="flex items-start gap-8">
+          <div className="flex flex-col md:flex-row items-start gap-8">
             <div className="flex-1">
               <h3 className="text-3xl font-bold mb-4">For Residents</h3>
               <p className="text-slate-700 mb-6">
@@ -228,7 +228,7 @@ export function Landing() {
       {/* For Workers */}
       <section className="bg-emerald-50 py-16">
         <div className="max-w-4xl mx-auto px-4">
-          <div className="flex items-start gap-8 flex-row-reverse">
+          <div className="flex flex-col-reverse md:flex-row-reverse items-start gap-8">
             <div className="flex-1">
               <h3 className="text-3xl font-bold mb-4">For Workers</h3>
               <p className="text-slate-700 mb-6">
@@ -256,7 +256,7 @@ export function Landing() {
                 <strong>Note:</strong> Worker registration requires verification by your barangay admin.
               </p>
               <Link
-                to="/register"
+                to="/apply-worker"
                 className="px-6 py-3 border-2 border-green-600 text-emerald-600 font-medium rounded-lg hover:bg-emerald-50 transition-colors inline-flex items-center gap-2"
               >
                 Apply as Worker <ArrowRight size={18} />
@@ -289,7 +289,7 @@ export function Landing() {
       {/* For Admin */}
       <section className="bg-purple-50 py-16">
         <div className="max-w-4xl mx-auto px-4">
-          <div className="flex items-start gap-8">
+          <div className="flex flex-col md:flex-row items-start gap-8">
             <div className="flex-1">
               <h3 className="text-3xl font-bold mb-4">For Barangay Admin</h3>
               <p className="text-slate-700 mb-6">
@@ -412,9 +412,9 @@ export function Landing() {
               <h4 className="text-white font-semibold mb-4">For Workers</h4>
               <ul className="text-sm space-y-2">
                 <li>
-                  <a href="#" className="hover:text-white">
+                  <Link to="/apply-worker" className="hover:text-white">
                     Apply as Worker
-                  </a>
+                  </Link>
                 </li>
                 <li>
                   <a href="#" className="hover:text-white">

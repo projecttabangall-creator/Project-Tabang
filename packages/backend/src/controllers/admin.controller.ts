@@ -1,9 +1,19 @@
 import { Response } from "express";
 import { AuthenticatedRequest } from "../middleware/auth";
-import { db } from "../config/firebase";
+import { auth, db } from "../config/firebase";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 
 const usersRef = db.collection("users");
+const passwordResetRequestsRef = db.collection("passwordResetRequests");
+
+function generateTemporaryPassword(length = 12): string {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
+  let password = "";
+  for (let index = 0; index < length; index += 1) {
+    password += alphabet[Math.floor(Math.random() * alphabet.length)];
+  }
+  return password;
+}
 
 function toDate(value: unknown): Date | null {
   if (!value) return null;
@@ -124,6 +134,157 @@ export async function listUsers(
   } catch (error) {
     console.error("List users error:", error);
     res.status(500).json({ error: "Failed to fetch users" });
+  }
+}
+
+/**
+ * GET /api/admin/password-reset-requests
+ * List password reset requests, newest first.
+ */
+export async function listPasswordResetRequests(
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> {
+  try {
+    const statusFilter = typeof req.query.status === "string" ? req.query.status : "pending";
+    const snapshot = await passwordResetRequestsRef.get();
+
+    const requests = snapshot.docs
+      .map((doc) => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          firstName: data.firstName,
+          lastName: data.lastName,
+          fullName: data.fullName,
+          role: data.role,
+          contactNumber: data.contactNumber,
+          note: data.note || "",
+          matchedUserId: data.matchedUserId || null,
+          matchedUserRole: data.matchedUserRole || null,
+          status: data.status || "pending",
+          requestedAt: toDate(data.requestedAt),
+          resolvedAt: toDate(data.resolvedAt),
+          resolvedBy: data.resolvedBy || null,
+          resolutionNote: data.resolutionNote || "",
+          tempPasswordIssuedAt: toDate(data.tempPasswordIssuedAt),
+        };
+      })
+      .filter((request) => statusFilter === "all" || request.status === statusFilter)
+      .sort(
+        (a, b) =>
+          (b.requestedAt?.getTime() ?? 0) - (a.requestedAt?.getTime() ?? 0)
+      );
+
+    res.json({ requests });
+  } catch (error) {
+    console.error("List password reset requests error:", error);
+    res.status(500).json({ error: "Failed to fetch password reset requests" });
+  }
+}
+
+/**
+ * PATCH /api/admin/password-reset-requests/:id
+ * Approve or reject a pending password reset request.
+ */
+export async function resolvePasswordResetRequest(
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> {
+  const requestId = req.params.id as string;
+  const action = req.body?.action;
+  const resolutionNote =
+    typeof req.body?.resolutionNote === "string" ? req.body.resolutionNote.trim() : "";
+
+  if (!["approve", "reject"].includes(action)) {
+    res.status(400).json({ error: "Invalid action" });
+    return;
+  }
+
+  try {
+    const requestRef = passwordResetRequestsRef.doc(requestId);
+    const requestDoc = await requestRef.get();
+
+    if (!requestDoc.exists) {
+      res.status(404).json({ error: "Password reset request not found" });
+      return;
+    }
+
+    const requestData = requestDoc.data()!;
+
+    if (requestData.status !== "pending") {
+      res.status(400).json({ error: "Password reset request has already been processed" });
+      return;
+    }
+
+    if (action === "reject") {
+      await requestRef.update({
+        status: "rejected",
+        resolvedAt: FieldValue.serverTimestamp(),
+        resolvedBy: req.user!.uid,
+        resolutionNote,
+      });
+
+      await db.collection("systemLogs").add({
+        action: "password_reset_request_rejected",
+        performedBy: req.user!.uid,
+        targetUserId: requestData.matchedUserId || null,
+        details: `Rejected password reset request for ${requestData.fullName || requestData.contactNumber}`,
+        createdAt: FieldValue.serverTimestamp(),
+      });
+
+      res.json({ message: "Password reset request rejected" });
+      return;
+    }
+
+    if (!requestData.matchedUserId) {
+      res.status(404).json({ error: "No matching user was found for this request" });
+      return;
+    }
+
+    const userRef = usersRef.doc(requestData.matchedUserId);
+    const userDoc = await userRef.get();
+
+    if (!userDoc.exists) {
+      res.status(404).json({ error: "Matched user account no longer exists" });
+      return;
+    }
+
+    const temporaryPassword = generateTemporaryPassword();
+
+    await auth.updateUser(requestData.matchedUserId, {
+      password: temporaryPassword,
+    });
+
+    await userRef.update({
+      mustChangePassword: true,
+      tempPasswordIssuedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    await requestRef.update({
+      status: "approved",
+      resolvedAt: FieldValue.serverTimestamp(),
+      resolvedBy: req.user!.uid,
+      resolutionNote,
+      tempPasswordIssuedAt: FieldValue.serverTimestamp(),
+    });
+
+    await db.collection("systemLogs").add({
+      action: "password_reset_request_approved",
+      performedBy: req.user!.uid,
+      targetUserId: requestData.matchedUserId,
+      details: `Issued temporary password for ${requestData.fullName || requestData.contactNumber}`,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+
+    res.json({
+      message: "Temporary password issued successfully",
+      temporaryPassword,
+    });
+  } catch (error) {
+    console.error("Resolve password reset request error:", error);
+    res.status(500).json({ error: "Failed to process password reset request" });
   }
 }
 
@@ -551,6 +712,53 @@ function getBucketKey(date: Date, period: string): string {
   }
   // monthly
   return `${y}-${m}`;
+}
+
+/**
+ * DELETE /api/admin/users/:id
+ * Permanently delete a user account (resident, worker, or admin).
+ */
+export async function deleteUser(
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> {
+  const id = req.params.id as string;
+
+  if (id === req.user!.uid) {
+    res.status(400).json({ error: "Cannot delete your own account" });
+    return;
+  }
+
+  try {
+    const doc = await usersRef.doc(id).get();
+    if (!doc.exists) {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+
+    const data = doc.data()!;
+
+    try {
+      await auth.deleteUser(id);
+    } catch (e: any) {
+      if (e.code !== "auth/user-not-found") throw e;
+    }
+
+    await usersRef.doc(id).delete();
+
+    await db.collection("systemLogs").add({
+      action: "user_deleted",
+      performedBy: req.user!.uid,
+      targetUserId: id,
+      details: `Deleted ${data.role} account: ${data.firstName} ${data.lastName} (${data.contactNumber})`,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+
+    res.json({ message: "User deleted successfully" });
+  } catch (error) {
+    console.error("Delete user error:", error);
+    res.status(500).json({ error: "Failed to delete user" });
+  }
 }
 
 /**

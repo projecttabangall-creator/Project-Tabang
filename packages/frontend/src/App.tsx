@@ -7,11 +7,12 @@ import { AppLayout } from "@/components/layout/AppLayout";
 // Auth pages
 import { Login } from "@/pages/auth/Login";
 import { Register } from "@/pages/auth/Register";
-import { OTPVerification } from "@/pages/auth/OTPVerification";
 import { ForgotPassword } from "@/pages/auth/ForgotPassword";
+import { ChangePassword } from "@/pages/auth/ChangePassword";
 
 // Public pages
 import { Landing } from "@/pages/Landing";
+import { WorkerApplicationInfo } from "@/pages/WorkerApplicationInfo";
 
 // Resident pages
 import { MyRequests } from "@/pages/resident/MyRequests";
@@ -24,6 +25,7 @@ import { ResidentEmergencyFeed } from "@/pages/resident/EmergencyFeed";
 // Worker pages
 import { WorkerHome } from "@/pages/worker/Home";
 import { JobDetail } from "@/pages/worker/JobDetail";
+import { WorkerJobHistory } from "@/pages/worker/JobHistory";
 import { WorkerProfile } from "@/pages/worker/Profile";
 import Checkout from "@/pages/worker/Checkout";
 import { WorkerEmergencyFeed } from "@/pages/worker/EmergencyFeed";
@@ -95,8 +97,11 @@ export default function App() {
           {/* Public routes */}
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
-          <Route path="/verify-otp" element={<OTPVerification />} />
+          <Route path="/apply-worker" element={<WorkerApplicationInfo />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route element={<ProtectedRoute />}>
+            <Route path="/change-password" element={<ChangePassword />} />
+          </Route>
 
           {/* Root redirect based on role */}
           <Route path="/" element={<RoleRedirect />} />
@@ -120,6 +125,7 @@ export default function App() {
           <Route element={<ProtectedRoute allowedRoles={["worker"]} />}>
             <Route element={<AppLayout />}>
               <Route path="/worker/home" element={<WorkerHome />} />
+              <Route path="/worker/jobs" element={<WorkerJobHistory />} />
               <Route path="/worker/job/:jobId" element={<JobDetail />} />
               <Route path="/worker/job/:requestId/dispute" element={<FileDispute />} />
               <Route path="/worker/checkout" element={<Checkout />} />

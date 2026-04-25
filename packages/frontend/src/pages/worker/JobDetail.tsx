@@ -120,8 +120,13 @@ export function JobDetail() {
       }
 
       setPriceChangeReason(currentRequest?.priceChangeReason || "");
-    } catch {
-      toast.error("Failed to load job details");
+    } catch (error: any) {
+      const status = error?.response?.status;
+      if (status === 403 || status === 404) {
+        toast.info("This job is no longer available to you.");
+      } else {
+        toast.error("Failed to load job details");
+      }
       navigate("/worker/home");
     } finally {
       setIsLoading(false);
@@ -762,8 +767,8 @@ export function JobDetail() {
 
       {/* Cancel Job Confirmation Modal */}
       {showCancelConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-sm w-full p-6 space-y-4">
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-sm w-full p-6 space-y-4 relative z-[1001]">
             <h3 className="font-bold text-red-600 text-lg">Cancel This Job?</h3>
             <p className="text-sm text-slate-700">
               The request will return to the queue and a different worker will be assigned.
@@ -791,8 +796,8 @@ export function JobDetail() {
 
       {/* Final Summary / Confirmation Modal */}
       {showSummary && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-sm w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-sm w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto relative z-[1001]">
             <h3 className="font-bold text-slate-800 text-lg">Review & Confirm</h3>
 
             <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm space-y-1">

@@ -20,3 +20,4 @@ export * from "./validation/request";
 export * from "./validation/category";
 export * from "./validation/payment";
 export * from "./validation/emergency";
+export * from "./utils/phone";

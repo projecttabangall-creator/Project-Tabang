@@ -1,81 +1,46 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useForm } from "react-hook-form";
+import { Link } from "react-router-dom";
 import { toast } from "sonner";
-import api from "@/services/api";
 import { BackButton } from "@/components/common/BackButton";
+import api from "@/services/api";
 
-type Step = "request" | "confirm";
+interface ForgotPasswordForm {
+  firstName: string;
+  lastName: string;
+  role: "resident" | "worker";
+  contactNumber: string;
+  note: string;
+}
 
 export function ForgotPassword() {
-  const navigate = useNavigate();
-  const [step, setStep] = useState<Step>("request");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [contactNumber, setContactNumber] = useState("");
-  const [otp, setOtp] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [devOtpHint, setDevOtpHint] = useState("");
+  const [submitted, setSubmitted] = useState(false);
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<ForgotPasswordForm>({
+    defaultValues: {
+      role: "resident",
+      note: "",
+    },
+  });
 
-  async function handleSendOtp(e: React.FormEvent) {
-    e.preventDefault();
-
-    if (!contactNumber.trim()) {
-      toast.error("Please enter your registered contact number");
-      return;
-    }
-
-    setIsSubmitting(true);
-    try {
-      const { data } = await api.post("/api/auth/reset-password", {
-        contactNumber: contactNumber.trim(),
-      });
-
-      if (data.devOtp) {
-        setDevOtpHint(data.devOtp);
-        toast.success(`OTP generated for testing: ${data.devOtp}`);
-      } else {
-        setDevOtpHint("");
-        toast.success("If the number is registered, an OTP has been sent.");
-      }
-
-      setStep("confirm");
-    } catch (error: any) {
-      toast.error(error.response?.data?.error || "Failed to request reset OTP");
-    } finally {
-      setIsSubmitting(false);
-    }
+  function normalizePhoneInput(value: string) {
+    const raw = value.replace(/[^\d+]/g, "");
+    const maxLen = raw.startsWith("+") ? 13 : 11;
+    return raw.slice(0, maxLen);
   }
 
-  async function handleConfirmReset(e: React.FormEvent) {
-    e.preventDefault();
-
-    if (!otp.trim()) {
-      toast.error("Please enter the OTP");
-      return;
-    }
-
-    if (newPassword.length < 8) {
-      toast.error("Password must be at least 8 characters");
-      return;
-    }
-
-    if (newPassword !== confirmPassword) {
-      toast.error("Passwords do not match");
-      return;
-    }
-
+  async function onSubmit(data: ForgotPasswordForm) {
     setIsSubmitting(true);
     try {
-      await api.post("/api/auth/reset-password/confirm", {
-        contactNumber: contactNumber.trim(),
-        otp: otp.trim(),
-        newPassword,
-      });
-
-      toast.success("Password reset successful. You can now sign in.");
-      navigate("/login");
+      await api.post("/api/auth/request-password-reset", data);
+      setSubmitted(true);
+      toast.success("Password reset request submitted");
     } catch (error: any) {
-      toast.error(error.response?.data?.error || "Failed to reset password");
+      toast.error(error?.response?.data?.error || "Failed to submit request");
     } finally {
       setIsSubmitting(false);
     }
@@ -84,109 +49,117 @@ export function ForgotPassword() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
       <div className="w-full max-w-md">
-        <BackButton to="/login" label="Back to Login" />
+        <BackButton to="/" label="Back" />
 
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-primary-700">Reset Password</h1>
           <p className="text-slate-500 mt-2">
-            Request an OTP, then confirm your new password.
+            Submit a request so an administrator can issue a temporary password.
           </p>
         </div>
 
         <div className="card">
-          {step === "request" ? (
-            <form onSubmit={handleSendOtp} className="space-y-4">
+          {submitted ? (
+            <div className="space-y-4 text-center">
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm text-emerald-800">
+                Your request is now pending admin review.
+              </div>
+              <p className="text-sm text-slate-600">
+                An administrator will verify your details and provide a temporary password.
+              </p>
+              <Link to="/login" className="btn-primary inline-block w-full">
+                Back to Login
+              </Link>
+            </div>
+          ) : (
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
               <div>
-                <label htmlFor="contactNumber" className="label">
-                  Registered Contact Number
+                <label htmlFor="firstName" className="label">
+                  First Name
                 </label>
                 <input
-                  id="contactNumber"
-                  type="tel"
-                  placeholder="09171234567"
+                  id="firstName"
                   className="input-field"
-                  value={contactNumber}
-                  onChange={(e) => setContactNumber(e.target.value)}
+                  {...register("firstName", { required: "First name is required" })}
                 />
-              </div>
-
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="btn-primary w-full"
-              >
-                {isSubmitting ? "Sending OTP..." : "Send Reset OTP"}
-              </button>
-            </form>
-          ) : (
-            <form onSubmit={handleConfirmReset} className="space-y-4">
-              <div className="rounded-lg border border-primary-200 bg-primary-50 px-4 py-3 text-sm text-primary-700">
-                OTP sent for <strong>{contactNumber}</strong>.
-                {devOtpHint && (
-                  <p className="mt-2 font-medium">Testing OTP: {devOtpHint}</p>
+                {errors.firstName && (
+                  <p className="mt-1 text-xs text-red-500">{errors.firstName.message}</p>
                 )}
               </div>
 
               <div>
-                <label htmlFor="otp" className="label">
-                  OTP
+                <label htmlFor="lastName" className="label">
+                  Last Name
                 </label>
                 <input
-                  id="otp"
-                  type="text"
-                  inputMode="numeric"
-                  maxLength={6}
-                  placeholder="Enter 6-digit OTP"
+                  id="lastName"
                   className="input-field"
-                  value={otp}
-                  onChange={(e) => setOtp(e.target.value)}
+                  {...register("lastName", { required: "Last name is required" })}
                 />
+                {errors.lastName && (
+                  <p className="mt-1 text-xs text-red-500">{errors.lastName.message}</p>
+                )}
               </div>
 
               <div>
-                <label htmlFor="newPassword" className="label">
-                  New Password
+                <label htmlFor="role" className="label">
+                  Account Type
                 </label>
-                <input
-                  id="newPassword"
-                  type="password"
-                  placeholder="At least 8 characters"
+                <select
+                  id="role"
                   className="input-field"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                />
+                  {...register("role", { required: "Role is required" })}
+                >
+                  <option value="resident">Resident</option>
+                  <option value="worker">Worker</option>
+                </select>
               </div>
 
               <div>
-                <label htmlFor="confirmPassword" className="label">
-                  Confirm New Password
+                <label htmlFor="contactNumber" className="label">
+                  Contact Number
                 </label>
                 <input
-                  id="confirmPassword"
-                  type="password"
-                  placeholder="Repeat your new password"
+                  id="contactNumber"
+                  type="tel"
                   className="input-field"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="09171234567"
+                  inputMode="tel"
+                  maxLength={13}
+                  {...register("contactNumber", {
+                    required: "Contact number is required",
+                    pattern: {
+                      value: /^(\+63|0)\d{10}$/,
+                      message: "Enter a valid PH number (e.g. 09171234567)",
+                    },
+                    onChange: (e) => {
+                      e.target.value = normalizePhoneInput(e.target.value);
+                    },
+                  })}
+                />
+                {errors.contactNumber && (
+                  <p className="mt-1 text-xs text-red-500">
+                    {errors.contactNumber.message}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label htmlFor="note" className="label">
+                  Additional Note
+                </label>
+                <textarea
+                  id="note"
+                  rows={4}
+                  className="input-field resize-none"
+                  placeholder="Add any details that can help the admin verify your request."
+                  {...register("note")}
                 />
               </div>
 
-              <div className="flex gap-2">
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="btn-primary flex-1"
-                >
-                  {isSubmitting ? "Resetting..." : "Reset Password"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setStep("request")}
-                  className="btn-secondary flex-1"
-                >
-                  Request New OTP
-                </button>
-              </div>
+              <button type="submit" disabled={isSubmitting} className="btn-primary w-full">
+                {isSubmitting ? "Submitting..." : "Submit Reset Request"}
+              </button>
             </form>
           )}
 

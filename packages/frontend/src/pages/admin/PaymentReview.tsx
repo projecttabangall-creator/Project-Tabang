@@ -17,6 +17,59 @@ interface Payment {
   proofUrl: string;
   status: string;
   createdAt: any;
+  resident?: {
+    userId: string;
+    fullName: string;
+    role: string;
+    contactNumber: string;
+  };
+  worker?: {
+    userId: string;
+    fullName: string;
+    role: string;
+    contactNumber: string;
+  };
+  request?: {
+    id: string;
+    categoryName: string;
+    description: string;
+    status: string;
+    locationAddress: string;
+    beneficiaryName: string;
+    finalPrice: number | null;
+    totalForResident: number | null;
+    commission: number | null;
+    paymentMethod: string;
+    rating: number | null;
+    ratingComment: string;
+    createdAt: any;
+    completedAt: any;
+  };
+}
+
+function formatCurrency(value: number | null | undefined) {
+  if (typeof value !== "number") return "N/A";
+  return `PHP ${value}`;
+}
+
+function formatDateTime(value: any) {
+  if (!value) return "N/A";
+  const date =
+    typeof value?.toDate === "function"
+      ? value.toDate()
+      : typeof value?._seconds === "number"
+      ? new Date(value._seconds * 1000)
+      : new Date(value);
+
+  if (Number.isNaN(date.getTime())) return "N/A";
+
+  return new Intl.DateTimeFormat("en-PH", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
 }
 
 export function PaymentReview() {
@@ -50,7 +103,7 @@ export function PaymentReview() {
     try {
       await api.patch(`/api/payments/${paymentId}/confirm`);
       toast.success("Payment confirmed");
-      setPayments((prev) => prev.filter((p) => p.id !== paymentId));
+      setPayments((prev) => prev.filter((payment) => payment.id !== paymentId));
     } catch {
       toast.error("Failed to confirm payment");
     } finally {
@@ -76,8 +129,10 @@ export function PaymentReview() {
       await api.patch(`/api/payments/${selectedPayment.id}/reject`, {
         reason: rejectReason.trim(),
       });
-      toast.success("Payment rejected — resident can resubmit");
-      setPayments((prev) => prev.filter((p) => p.id !== selectedPayment.id));
+      toast.success("Payment rejected; resident can resubmit");
+      setPayments((prev) =>
+        prev.filter((payment) => payment.id !== selectedPayment.id)
+      );
       setShowRejectModal(false);
       setSelectedPayment(null);
     } catch {
@@ -100,10 +155,11 @@ export function PaymentReview() {
       <BackButton to="/admin/dashboard" label="Back to Dashboard" />
       <div>
         <h2 className="text-2xl font-bold flex items-center gap-2">
-          <span className="text-2xl">₱</span> Payment Review
+          <span className="text-2xl">P</span> Payment Review
         </h2>
         <p className="text-slate-600 mt-1">
-          {payments.length} payment{payments.length !== 1 ? "s" : ""} pending review
+          {payments.length} payment{payments.length !== 1 ? "s" : ""} pending
+          review
         </p>
       </div>
 
@@ -119,12 +175,12 @@ export function PaymentReview() {
         <div className="space-y-4">
           {payments.map((payment) => (
             <div key={payment.id} className="card space-y-4">
-              {/* Header */}
               <div className="flex items-start justify-between">
                 <div>
                   <p className="font-semibold">Payment #{payment.id.slice(-6)}</p>
                   <p className="text-xs text-slate-500">
-                    Request: {payment.requestId.slice(-8)}
+                    Request:{" "}
+                    {payment.request?.categoryName || payment.requestId.slice(-8)}
                   </p>
                 </div>
                 <span className="text-xs bg-yellow-50 text-yellow-700 px-2 py-1 rounded font-medium">
@@ -132,35 +188,150 @@ export function PaymentReview() {
                 </span>
               </div>
 
-              {/* Amounts */}
               <div className="grid grid-cols-3 gap-3">
                 <div className="bg-slate-50 rounded-lg p-3 text-center">
                   <p className="text-xs text-slate-600">Worker</p>
-                  <p className="font-bold">₱{payment.workerAmount}</p>
+                  <p className="font-bold">
+                    {formatCurrency(payment.workerAmount)}
+                  </p>
                 </div>
                 <div className="bg-slate-50 rounded-lg p-3 text-center">
                   <p className="text-xs text-slate-600">Commission</p>
-                  <p className="font-bold text-emerald-600">₱{payment.commissionAmount}</p>
+                  <p className="font-bold text-emerald-600">
+                    {formatCurrency(payment.commissionAmount)}
+                  </p>
                 </div>
                 <div className="bg-primary-50 rounded-lg p-3 text-center">
                   <p className="text-xs text-slate-600">Total</p>
-                  <p className="font-bold text-primary-600">₱{payment.totalAmount}</p>
+                  <p className="font-bold text-primary-600">
+                    {formatCurrency(payment.totalAmount)}
+                  </p>
                 </div>
               </div>
 
-              {/* Info */}
               <div className="text-sm space-y-1">
                 <p>
                   <span className="text-slate-600">Method:</span>{" "}
-                  <span className="font-medium uppercase">{payment.paymentMethod}</span>
+                  <span className="font-medium uppercase">
+                    {payment.paymentMethod}
+                  </span>
                 </p>
                 <p>
                   <span className="text-slate-600">Barangay Share:</span>{" "}
-                  <span className="font-medium text-emerald-600">₱{payment.barangayShareAmount}</span>
+                  <span className="font-medium text-emerald-600">
+                    {formatCurrency(payment.barangayShareAmount)}
+                  </span>
+                </p>
+                <p>
+                  <span className="text-slate-600">Submitted:</span>{" "}
+                  <span className="font-medium">
+                    {formatDateTime(payment.createdAt)}
+                  </span>
                 </p>
               </div>
 
-              {/* Proof Image Button */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div className="bg-slate-50 rounded-lg p-4 space-y-2">
+                  <p className="text-sm font-semibold text-slate-800">
+                    Request Details
+                  </p>
+                  <p className="text-sm">
+                    <span className="text-slate-600">Service:</span>{" "}
+                    <span className="font-medium">
+                      {payment.request?.categoryName || "N/A"}
+                    </span>
+                  </p>
+                  <p className="text-sm">
+                    <span className="text-slate-600">Description:</span>{" "}
+                    <span className="font-medium">
+                      {payment.request?.description || "N/A"}
+                    </span>
+                  </p>
+                  <p className="text-sm">
+                    <span className="text-slate-600">Location:</span>{" "}
+                    <span className="font-medium">
+                      {payment.request?.locationAddress || "N/A"}
+                    </span>
+                  </p>
+                  <p className="text-sm">
+                    <span className="text-slate-600">Beneficiary:</span>{" "}
+                    <span className="font-medium">
+                      {payment.request?.beneficiaryName || "N/A"}
+                    </span>
+                  </p>
+                  <p className="text-sm">
+                    <span className="text-slate-600">Completed:</span>{" "}
+                    <span className="font-medium">
+                      {formatDateTime(payment.request?.completedAt)}
+                    </span>
+                  </p>
+                </div>
+
+                <div className="bg-slate-50 rounded-lg p-4 space-y-2">
+                  <p className="text-sm font-semibold text-slate-800">
+                    Parties & Verification
+                  </p>
+                  <p className="text-sm">
+                    <span className="text-slate-600">Resident:</span>{" "}
+                    <span className="font-medium">
+                      {payment.resident?.fullName || payment.residentId.slice(-8)}
+                    </span>
+                    {payment.resident?.contactNumber
+                      ? ` • ${payment.resident.contactNumber}`
+                      : ""}
+                  </p>
+                  <p className="text-sm">
+                    <span className="text-slate-600">Worker:</span>{" "}
+                    <span className="font-medium">
+                      {payment.worker?.fullName || payment.workerId.slice(-8)}
+                    </span>
+                    {payment.worker?.contactNumber
+                      ? ` • ${payment.worker.contactNumber}`
+                      : ""}
+                  </p>
+                  <p className="text-sm">
+                    <span className="text-slate-600">
+                      Agreed Worker Amount:
+                    </span>{" "}
+                    <span className="font-medium">
+                      {formatCurrency(
+                        payment.request?.finalPrice ?? payment.workerAmount
+                      )}
+                    </span>
+                  </p>
+                  <p className="text-sm">
+                    <span className="text-slate-600">Resident Total:</span>{" "}
+                    <span className="font-medium">
+                      {formatCurrency(
+                        payment.request?.totalForResident ?? payment.totalAmount
+                      )}
+                    </span>
+                  </p>
+                  <p className="text-sm">
+                    <span className="text-slate-600">Request Status:</span>{" "}
+                    <span className="font-medium uppercase">
+                      {payment.request?.status?.replace(/_/g, " ") || "N/A"}
+                    </span>
+                  </p>
+                  <p className="text-sm">
+                    <span className="text-slate-600">Rating:</span>{" "}
+                    <span className="font-medium">
+                      {payment.request?.rating != null
+                        ? `${payment.request.rating}/5`
+                        : "No rating"}
+                    </span>
+                  </p>
+                  {payment.request?.ratingComment ? (
+                    <p className="text-sm">
+                      <span className="text-slate-600">Rating Comment:</span>{" "}
+                      <span className="font-medium">
+                        {payment.request.ratingComment}
+                      </span>
+                    </p>
+                  ) : null}
+                </div>
+              </div>
+
               <button
                 onClick={() => setSelectedProofUrl(payment.proofUrl)}
                 className="flex items-center gap-2 text-sm text-primary-600 hover:text-primary-800 font-medium transition-colors"
@@ -169,7 +340,6 @@ export function PaymentReview() {
                 View Payment Proof
               </button>
 
-              {/* Actions */}
               <div className="flex gap-2 pt-2 border-t border-slate-100">
                 <button
                   onClick={() => handleConfirm(payment.id)}
@@ -193,13 +363,13 @@ export function PaymentReview() {
         </div>
       )}
 
-      {/* Reject Modal */}
       {showRejectModal && selectedPayment && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl p-6 max-w-md w-full space-y-4">
             <h3 className="font-semibold text-lg">Reject Payment</h3>
             <p className="text-sm text-slate-600">
-              Payment #{selectedPayment.id.slice(-6)} — ₱{selectedPayment.totalAmount}
+              Payment #{selectedPayment.id.slice(-6)} •{" "}
+              {formatCurrency(selectedPayment.totalAmount)}
             </p>
             <div>
               <label className="label">Reason for Rejection</label>
@@ -216,7 +386,9 @@ export function PaymentReview() {
                 disabled={actionPaymentId === selectedPayment.id}
                 className="flex-1 py-2 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg transition-colors"
               >
-                {actionPaymentId === selectedPayment.id ? "Rejecting..." : "Confirm Rejection"}
+                {actionPaymentId === selectedPayment.id
+                  ? "Rejecting..."
+                  : "Confirm Rejection"}
               </button>
               <button
                 onClick={() => {
@@ -232,7 +404,6 @@ export function PaymentReview() {
         </div>
       )}
 
-      {/* Image Viewer Modal */}
       {selectedProofUrl && (
         <div className="fixed inset-0 bg-black/75 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl overflow-hidden max-w-2xl w-full max-h-[90vh] flex flex-col">

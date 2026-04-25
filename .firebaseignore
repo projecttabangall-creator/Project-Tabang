@@ -36,3 +36,11 @@ scripts/
 .env
 .env.local
 .env.*.local
+
+# Credentials — must never ship in deployed Cloud Function source bundle
+service-account.json
+*service-account*.json
+*.key.json
+*-credentials.json
+credentials.json
+google-credentials.json

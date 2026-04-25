@@ -17,6 +17,7 @@ import { superadminRouter } from "./routes/superadmin.routes";
 // Import triggers
 import { onRequestCreated } from "./triggers/onRequestCreated";
 import { onRequestUpdated } from "./triggers/onRequestUpdated";
+import { onUserUpdated } from "./triggers/onUserUpdated";
 
 const app = express();
 
@@ -42,7 +43,10 @@ app.use("/api/emergencies", emergencyRouter);
 app.use("/api/superadmin", superadminRouter);
 
 // Export as Firebase Cloud Function (v2, public invoker for Hosting rewrites)
-export const api = onRequest({ invoker: "public" }, app);
+export const api = onRequest(
+  { invoker: "public" },
+  app
+);
 
 // Export Firestore triggers
-export { onRequestCreated, onRequestUpdated };
+export { onRequestCreated, onRequestUpdated, onUserUpdated };
