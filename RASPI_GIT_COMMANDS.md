@@ -37,6 +37,39 @@ sudo systemctl restart tabang-emulators tabang-fingerprint tabang-frontend
 
 ---
 
+## Ask to Pull Updates Every Pi Login
+
+Use the helper script:
+
+```bash
+cd ~/project-tabang
+chmod +x scripts/raspi-login-update-prompt.sh
+```
+
+Add this to the bottom of `~/.bashrc`:
+
+```bash
+if [ -t 0 ] && [ -x "$HOME/project-tabang/scripts/raspi-login-update-prompt.sh" ]; then
+  "$HOME/project-tabang/scripts/raspi-login-update-prompt.sh"
+fi
+```
+
+Every time you open a terminal or SSH into the Raspberry Pi, it will ask:
+
+```text
+Pull latest updates from origin/main now? [y/N]
+```
+
+For the production kiosk, this is enough because the frontend is the deployed
+website and the Pi only needs updated fingerprint-service code. If you are
+running a local frontend on the Pi, add this before the script block:
+
+```bash
+export TABANG_BUILD_LOCAL_FRONTEND=1
+```
+
+---
+
 ## Useful Everyday Commands
 
 | Task | Command |

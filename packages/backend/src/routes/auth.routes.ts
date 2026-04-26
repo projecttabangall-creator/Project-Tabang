@@ -10,6 +10,7 @@ import {
 } from "@tabang/shared";
 import {
   changePassword,
+  createFingerprintLoginToken,
   requestPasswordReset,
   registerResident,
   login,
@@ -27,6 +28,7 @@ export const authRouter = Router();
 // Public routes
 authRouter.post("/register", validate(registerResidentSchema), registerResident);
 authRouter.post("/login", validate(loginSchema), login);
+authRouter.post("/fingerprint-login-token", createFingerprintLoginToken);
 authRouter.post(
   "/resolve-login-identifier",
   validate(resolveLoginIdentifierSchema),

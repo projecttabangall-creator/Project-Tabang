@@ -1,6 +1,9 @@
 # Raspberry Pi 4 Deployment and Fingerprint Setup
 
-This guide explains how to run Project Tabang locally on a Raspberry Pi 4 using Firebase emulators and an AS608 fingerprint scanner.
+This guide explains how to run Project Tabang on a Raspberry Pi 4 with an AS608
+fingerprint scanner. For the real kiosk setup, the Pi opens the live web app in
+Chromium and only runs the local fingerprint service. The local emulator setup
+is still documented later for development/testing.
 
 ## Hardware Requirements
 
@@ -37,7 +40,15 @@ FINGERPRINT_PORT=/dev/ttyS0
 FINGERPRINT_BAUD=57600
 API_BASE_URL=http://localhost:5001/<your-project-id>/us-central1/api
 FLASK_PORT=5000
+FINGERPRINT_LOGIN_SECRET=<same-secret-as-the-production-backend>
 EOF
+```
+
+If the Raspberry Pi is only acting as a kiosk for the live web app, use the
+production API instead of the emulator API:
+
+```bash
+API_BASE_URL=https://project-tabang---claude-code.web.app/api
 ```
 
 ## Fingerprint Service Overview
@@ -52,7 +63,12 @@ Typical flow:
 
 - Admin enrollment: frontend calls `POST /fingerprint/enroll`
 - Worker verification: frontend calls `POST /fingerprint/verify`
+- Fingerprint login: frontend calls local `POST /fingerprint/login`, then the
+  local service requests a Firebase custom token from the backend
 - Backend API: local emulator functions receive worker biometric updates on port `5001`
+
+For the production kiosk setup, the backend API is the live hosted API and the Pi
+only runs the local fingerprint service.
 
 ## Install the Raspberry Pi Environment
 
@@ -134,6 +150,98 @@ Go to:
 Then reboot.
 
 ## Run the System
+
+### Production Web App Kiosk Mode
+
+For the final kiosk-style setup, the Pi does not need to run Firebase emulators
+or a local frontend server. It only needs the fingerprint service and Chromium.
+
+Start the fingerprint service:
+
+```bash
+cd ~/project-tabang/fingerprint-service
+source .venv/bin/activate
+python3 app.py
+```
+
+Open the live app in Chromium kiosk mode:
+
+```bash
+chromium-browser --kiosk https://project-tabang---claude-code.web.app
+```
+
+If your OS uses the newer command name:
+
+```bash
+chromium --kiosk https://project-tabang---claude-code.web.app
+```
+
+The live website will call `http://localhost:5000` from the Pi browser when a
+fingerprint scan is needed.
+
+### Auto-Start on Boot
+
+The easiest production setup is to install the provided kiosk service script:
+
+```bash
+cd ~/project-tabang
+chmod +x scripts/raspi-login-update-prompt.sh
+chmod +x scripts/raspi-install-kiosk-services.sh
+./scripts/raspi-install-kiosk-services.sh
+sudo reboot
+```
+
+This installs:
+
+- `tabang-fingerprint.service`, which starts the fingerprint bridge on boot.
+- A Chromium desktop autostart entry, which opens the live web app in kiosk mode
+  after the Pi desktop starts.
+- A terminal login prompt that asks whether to pull updates from `origin/main`.
+
+Check the service after reboot:
+
+```bash
+sudo systemctl status tabang-fingerprint
+```
+
+If you are testing a local frontend build instead of the live website, install
+the optional frontend service:
+
+```bash
+cd ~/project-tabang
+INSTALL_LOCAL_FRONTEND=1 WEBAPP_URL=http://localhost:3000 ./scripts/raspi-install-kiosk-services.sh
+sudo reboot
+```
+
+For the production kiosk, keep using the live URL:
+
+```bash
+WEBAPP_URL=https://project-tabang---claude-code.web.app ./scripts/raspi-install-kiosk-services.sh
+```
+
+### Ask to Pull Updates on Every Terminal Login
+
+The installer adds this block to `~/.bashrc`:
+
+```bash
+if [ -t 0 ] && [ -x "$HOME/project-tabang/scripts/raspi-login-update-prompt.sh" ]; then
+  "$HOME/project-tabang/scripts/raspi-login-update-prompt.sh"
+fi
+```
+
+Whenever you open a terminal or SSH into the Pi, it asks:
+
+```text
+Pull latest updates from origin/main now? [y/N]
+```
+
+If you answer `y`, it runs `git fetch`, `git pull --ff-only`, installs npm
+dependencies if needed, and restarts the fingerprint service. If the Pi is also
+running the optional local frontend, set this in `~/.bashrc` before the script:
+
+```bash
+export TABANG_BUILD_LOCAL_FRONTEND=1
+```
 
 Open three terminal sessions.
 

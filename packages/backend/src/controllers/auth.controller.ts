@@ -267,6 +267,85 @@ export async function login(req: Request, res: Response): Promise<void> {
   }
 }
 
+export async function createFingerprintLoginToken(
+  req: Request,
+  res: Response
+): Promise<void> {
+  const configuredSecret = process.env.FINGERPRINT_LOGIN_SECRET;
+  const providedSecret =
+    req.header("x-fingerprint-login-secret") ||
+    (typeof req.body?.serviceSecret === "string" ? req.body.serviceSecret : "");
+  const userId = typeof req.body?.userId === "string" ? req.body.userId.trim() : "";
+  const role = typeof req.body?.role === "string" ? req.body.role.trim() : "";
+
+  if (!configuredSecret) {
+    res.status(503).json({ error: "Fingerprint login is not configured" });
+    return;
+  }
+
+  if (!providedSecret || providedSecret !== configuredSecret) {
+    res.status(403).json({ error: "Fingerprint service is not authorized" });
+    return;
+  }
+
+  if (!userId || !["worker", "admin", "superadmin"].includes(role)) {
+    res.status(400).json({ error: "Valid userId and role are required" });
+    return;
+  }
+
+  try {
+    const userDoc = await db.collection("users").doc(userId).get();
+    if (!userDoc.exists) {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+
+    const userData = userDoc.data()!;
+    if (userData.role !== role) {
+      res.status(403).json({ error: "Fingerprint identity role mismatch" });
+      return;
+    }
+
+    if (userData.accountStatus && userData.accountStatus !== "active") {
+      res.status(403).json({ error: "Account is not active" });
+      return;
+    }
+
+    const biometricEnrolled =
+      role === "worker"
+        ? Boolean(userData.workerData?.biometricEnrolled)
+        : Boolean(userData.biometricEnrolled);
+
+    if (!biometricEnrolled) {
+      res.status(403).json({ error: "Fingerprint is not enrolled for this account" });
+      return;
+    }
+
+    const customToken = await auth.createCustomToken(userId, { role });
+
+    await userDoc.ref.update({
+      lastFingerprintVerification: {
+        verified: true,
+        timestamp: FieldValue.serverTimestamp(),
+      },
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    res.json({
+      customToken,
+      user: {
+        uid: userId,
+        role,
+        firstName: userData.firstName || "",
+        lastName: userData.lastName || "",
+      },
+    });
+  } catch (error) {
+    console.error("Create fingerprint login token error:", error);
+    res.status(500).json({ error: "Failed to create fingerprint login token" });
+  }
+}
+
 export async function resolveLoginIdentifier(
   req: Request,
   res: Response

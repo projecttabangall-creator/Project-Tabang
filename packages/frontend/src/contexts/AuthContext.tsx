@@ -9,6 +9,7 @@ import {
 import {
   onAuthStateChanged,
   reload,
+  signInWithCustomToken,
   signInWithEmailAndPassword,
   signOut as firebaseSignOut,
   User as FirebaseUser,
@@ -83,6 +84,7 @@ interface AuthContextType {
   userProfile: UserProfile | null;
   loading: boolean;
   signIn: (identifier: string, password: string) => Promise<void>;
+  signInWithFingerprintToken: (customToken: string) => Promise<void>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
@@ -240,6 +242,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     throw lastError;
   }
 
+  async function signInWithFingerprintToken(customToken: string) {
+    const credential = await signInWithCustomToken(firebaseAuth, customToken);
+    await reload(credential.user);
+  }
+
   // Sign out
   async function signOut() {
     await firebaseSignOut(firebaseAuth);
@@ -387,8 +394,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         firebaseUser,
         userProfile,
         loading,
-        signIn,
-        signOut,
+      signIn,
+      signInWithFingerprintToken,
+      signOut,
         refreshProfile,
       }}
     >

@@ -2,6 +2,11 @@
 
 This guide assumes you already have the main branch files cloned into `~/project-tabang` on your Raspberry Pi.
 
+For the actual kiosk deployment, prefer the production flow in
+`RASPBERRY_PI_SETUP.md`: the Pi opens the live web app and runs only the local
+fingerprint service. The local frontend/emulator flow below is for development
+and offline testing.
+
 ---
 
 ## Quick Setup (First Time Only)

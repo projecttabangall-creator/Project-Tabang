@@ -14,6 +14,7 @@ CORS(app)
 FINGERPRINT_PORT = os.getenv("FINGERPRINT_PORT", "/dev/ttyS0")
 FINGERPRINT_BAUD = int(os.getenv("FINGERPRINT_BAUD", "57600"))
 API_BASE_URL = os.getenv("API_BASE_URL", "https://project-tabang---claude-code.web.app/api")
+FINGERPRINT_LOGIN_SECRET = os.getenv("FINGERPRINT_LOGIN_SECRET", "")
 ENROLLMENTS_FILE = os.getenv(
     "FINGERPRINT_ENROLLMENTS_FILE",
     os.path.join(os.path.dirname(__file__), "enrollments.json"),
@@ -90,6 +91,18 @@ def sync_biometric_status(user_id, role, auth_token, biometric_enrolled):
         f"{API_BASE_URL}/auth/profile/biometric",
         json={"biometricEnrolled": biometric_enrolled},
         headers=headers,
+        timeout=10,
+    )
+
+
+def request_login_token(user_id, role):
+    if not FINGERPRINT_LOGIN_SECRET:
+        raise Exception("FINGERPRINT_LOGIN_SECRET is not configured")
+
+    return http_requests.post(
+        f"{API_BASE_URL}/auth/fingerprint-login-token",
+        json={"userId": user_id, "role": role},
+        headers={"x-fingerprint-login-secret": FINGERPRINT_LOGIN_SECRET},
         timeout=10,
     )
 
@@ -246,6 +259,57 @@ def verify():
 
     print(f"[VERIFY] No match for worker {worker_id}")
     return jsonify({"success": False, "message": "Fingerprint not recognized"}), 200
+
+
+@app.route("/fingerprint/login", methods=["POST"])
+def fingerprint_login():
+    try:
+        fp = get_sensor()
+    except Exception as error:
+        return jsonify({"error": str(error)}), 503
+
+    print("[LOGIN] Waiting for fingerprint scan...")
+    while not fp.readImage():
+        pass
+    fp.convertImage(0x01)
+
+    result = fp.searchTemplate()
+    position = result[0]
+    accuracy = result[1]
+
+    if position < 0:
+        print("[LOGIN] No fingerprint match")
+        return jsonify({"success": False, "message": "Fingerprint not recognized"}), 200
+
+    user_id, record = find_identity_by_position(position)
+    if not user_id or not record:
+        print(f"[LOGIN] Template position {position} has no linked account")
+        return jsonify({"success": False, "message": "Fingerprint is not linked to an account"}), 200
+
+    role = record.get("role")
+    if role not in {"worker", "admin", "superadmin"}:
+        return jsonify({"success": False, "message": "Unsupported fingerprint role"}), 200
+
+    try:
+        resp = request_login_token(user_id, role)
+        payload = resp.json()
+    except Exception as error:
+        print(f"[LOGIN] Backend token request failed: {error}")
+        return jsonify({"error": f"Could not contact backend: {error}"}), 503
+
+    if resp.status_code != 200:
+        print(f"[LOGIN] Backend rejected fingerprint login: {resp.status_code} {payload}")
+        return jsonify({
+            "success": False,
+            "message": payload.get("error", "Fingerprint login rejected"),
+        }), 200
+
+    print(f"[LOGIN] Match! {role} {user_id}, accuracy {accuracy}")
+    return jsonify({
+        "success": True,
+        "customToken": payload.get("customToken"),
+        "user": payload.get("user"),
+    }), 200
 
 
 @app.route("/health", methods=["GET"])

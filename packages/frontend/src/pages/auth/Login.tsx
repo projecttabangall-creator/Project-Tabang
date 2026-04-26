@@ -8,6 +8,7 @@ import { firebaseAuth } from "@/config/firebase";
 import logoWithText from "@Assets/logo-with-text.png";
 import { normalizePhilippinePhoneNumber } from "@/utils/phone";
 import { isSeedAuthEmail } from "@/utils/auth";
+import { Fingerprint, Loader } from "lucide-react";
 
 interface LoginForm {
   identifier: string;
@@ -15,10 +16,12 @@ interface LoginForm {
 }
 
 export function Login() {
-  const { signIn } = useAuth();
+  const { signIn, signInWithFingerprintToken } = useAuth();
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
+  const [isFingerprintLoading, setIsFingerprintLoading] = useState(false);
   const [notFound, setNotFound] = useState(false);
+  const fpUrl = import.meta.env.VITE_FINGERPRINT_URL || "http://localhost:5000";
 
   const {
     register,
@@ -72,6 +75,38 @@ export function Login() {
       }
     } finally {
       setIsLoading(false);
+    }
+  }
+
+  async function handleFingerprintLogin() {
+    setIsFingerprintLoading(true);
+    setNotFound(false);
+    try {
+      const res = await fetch(`${fpUrl}/fingerprint/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      const result = await res.json();
+
+      if (!res.ok) {
+        throw new Error(result.error || "Fingerprint service unavailable");
+      }
+
+      if (!result.success || !result.customToken) {
+        toast.error(result.message || "Fingerprint not recognized");
+        return;
+      }
+
+      await signInWithFingerprintToken(result.customToken);
+      toast.success("Fingerprint login successful");
+      navigate("/");
+    } catch (error: any) {
+      toast.error(
+        error?.message ||
+          "Fingerprint login failed. Check that the Raspberry Pi service is running."
+      );
+    } finally {
+      setIsFingerprintLoading(false);
     }
   }
 
@@ -155,6 +190,22 @@ export function Login() {
 
             <button type="submit" disabled={isLoading} className="btn-primary w-full">
               {isLoading ? "Signing in..." : "Sign In"}
+            </button>
+
+            <button
+              type="button"
+              onClick={handleFingerprintLogin}
+              disabled={isLoading || isFingerprintLoading}
+              className="w-full rounded-lg border border-primary-200 bg-primary-50 px-4 py-3 font-semibold text-primary-700 transition-colors hover:bg-primary-100 disabled:cursor-not-allowed disabled:opacity-60 flex items-center justify-center gap-2"
+            >
+              {isFingerprintLoading ? (
+                <Loader size={18} className="animate-spin" />
+              ) : (
+                <Fingerprint size={18} />
+              )}
+              {isFingerprintLoading
+                ? "Scanning fingerprint..."
+                : "Sign In with Fingerprint"}
             </button>
 
             <div className="text-center">
