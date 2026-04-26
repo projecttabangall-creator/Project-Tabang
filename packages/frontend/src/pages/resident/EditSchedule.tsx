@@ -4,6 +4,8 @@ import { toast } from "sonner";
 import { BackButton } from "@/components/common/BackButton";
 import { Clock } from "lucide-react";
 import api from "@/services/api";
+import { TimeInput } from "@/components/common/TimeInput";
+import { format12hRange } from "@/utils/time";
 
 interface Request {
   id: string;
@@ -146,7 +148,7 @@ export function EditSchedule() {
               {typeof request.schedule.date === "object"
                 ? new Date(request.schedule.date._seconds * 1000).toLocaleDateString()
                 : request.schedule.date}{" "}
-              {request.schedule.startTime ? `${request.schedule.startTime} - ${request.schedule.endTime}` : "No specified time"}
+              {request.schedule.startTime ? format12hRange(request.schedule.startTime, request.schedule.endTime) : "No specified time"}
             </span>
           </p>
         </div>
@@ -194,21 +196,11 @@ export function EditSchedule() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="label">Start Time</label>
-                <input
-                  type="time"
-                  value={startTime}
-                  onChange={(e) => setStartTime(e.target.value)}
-                  className="input-field"
-                />
+                <TimeInput value={startTime} onChange={setStartTime} />
               </div>
               <div>
                 <label className="label">End Time</label>
-                <input
-                  type="time"
-                  value={endTime}
-                  onChange={(e) => setEndTime(e.target.value)}
-                  className="input-field"
-                />
+                <TimeInput value={endTime} onChange={setEndTime} />
               </div>
             </div>
           )}

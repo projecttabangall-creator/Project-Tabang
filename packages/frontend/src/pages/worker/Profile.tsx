@@ -16,15 +16,31 @@ import {
   ScrollText,
   X,
   ChevronDown,
+  IdCard,
 } from "lucide-react";
 import { toast } from "sonner";
 import { uploadFile } from "@/utils/uploadFile";
 import api from "@/services/api";
 import { getWorkerCredentialLabel } from "@/constants/workerCredentials";
 import { WorkerTermsContent } from "@/components/common/WorkerTermsContent";
+import { TimeInput } from "@/components/common/TimeInput";
+import { format12h } from "@/utils/time";
 
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const ALL_DAYS = [0, 1, 2, 3, 4, 5, 6];
+
+const formatWorkingDate = (date: string) =>
+  new Date(`${date}T00:00:00`).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    weekday: "short",
+  });
+
+const formatStatus = (status: string) => status.replace(/_/g, " ");
+const toLocalDateInputValue = (date = new Date()) => {
+  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return localDate.toISOString().split("T")[0];
+};
 
 type AvailabilitySlot =
   | { type: "recurring"; dayOfWeek: number; startTime: string; endTime: string }
@@ -44,13 +60,28 @@ export function WorkerProfile() {
   const [emailValue, setEmailValue] = useState("");
   const [emailError, setEmailError] = useState("");
   const [savingEmail, setSavingEmail] = useState(false);
+  const [showNameRequest, setShowNameRequest] = useState(false);
+  const [nameFirst, setNameFirst] = useState("");
+  const [nameLast, setNameLast] = useState("");
+  const [idPhoto, setIdPhoto] = useState<File | null>(null);
+  const [submittingNameRequest, setSubmittingNameRequest] = useState(false);
   const [selectedCredential, setSelectedCredential] = useState<{
     name: string;
     fileUrl: string;
   } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const idUploadInputRef = useRef<HTMLInputElement>(null);
+  const idCameraInputRef = useRef<HTMLInputElement>(null);
 
   const workerData = userProfile?.workerData;
+  const workingSchedule = (workerData?.workingSchedule || [])
+    .filter((slot) => !["completed", "payment_confirmed", "cancelled"].includes(slot.status))
+    .slice()
+    .sort((a, b) =>
+      a.date === b.date
+        ? a.startTime.localeCompare(b.startTime)
+        : a.date.localeCompare(b.date)
+    );
 
   // Fetch category names for the worker's specializations
   useEffect(() => {
@@ -129,6 +160,45 @@ export function WorkerProfile() {
     }
   }
 
+  function startNameRequest() {
+    setNameFirst(userProfile?.firstName || "");
+    setNameLast(userProfile?.lastName || "");
+    setIdPhoto(null);
+    setShowNameRequest(true);
+  }
+
+  async function submitNameRequest(e: React.FormEvent) {
+    e.preventDefault();
+    if (!nameFirst.trim() || !nameLast.trim()) {
+      toast.error("Enter your requested first and last name.");
+      return;
+    }
+    if (!idPhoto) {
+      toast.error("Upload a photo of you holding an ID.");
+      return;
+    }
+
+    setSubmittingNameRequest(true);
+    try {
+      const idPhotoUrl = await uploadFile(
+        `users/${userProfile!.uid}/name-change-id-${Date.now()}.jpg`,
+        idPhoto
+      );
+      await api.post("/api/auth/profile/name-change-request", {
+        firstName: nameFirst.trim(),
+        lastName: nameLast.trim(),
+        idPhotoUrl,
+      });
+      await refreshProfile();
+      setShowNameRequest(false);
+      toast.success("Name change request submitted for admin review.");
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || "Failed to submit name change request");
+    } finally {
+      setSubmittingNameRequest(false);
+    }
+  }
+
   function validateSlots(slots: AvailabilitySlot[]): string[] {
     const errors = slots.map(() => "");
 
@@ -140,6 +210,12 @@ export function WorkerProfile() {
       }
 
       const slotType = "type" in slot ? slot.type : "recurring";
+      const today = toLocalDateInputValue();
+
+      if (slotType === "specific" && "date" in slot && slot.date < today) {
+        errors[i] = "Specific date cannot be in the past.";
+        return;
+      }
 
       // Rule 2: no overlap with other slots
       for (let j = 0; j < slots.length; j++) {
@@ -156,14 +232,14 @@ export function WorkerProfile() {
         // Recurring vs Recurring: same dayOfWeek
         if (slotType === "recurring" && otherType === "recurring") {
           if ("dayOfWeek" in slot && "dayOfWeek" in other && slot.dayOfWeek === other.dayOfWeek) {
-            errors[i] = `Conflicts with ${DAY_NAMES[other.dayOfWeek as number]} ${other.startTime}–${other.endTime}.`;
+            errors[i] = `Conflicts with ${DAY_NAMES[other.dayOfWeek as number]} ${format12h(other.startTime)}–${format12h(other.endTime)}.`;
             break;
           }
         }
         // Specific vs Specific: same date
         else if (slotType === "specific" && otherType === "specific") {
           if ("date" in slot && "date" in other && slot.date === other.date) {
-            errors[i] = `Conflicts with ${new Date(other.date).toLocaleDateString()} ${other.startTime}–${other.endTime}.`;
+            errors[i] = `Conflicts with ${new Date(other.date).toLocaleDateString()} ${format12h(other.startTime)}–${format12h(other.endTime)}.`;
             break;
           }
         }
@@ -172,7 +248,7 @@ export function WorkerProfile() {
           if ("dayOfWeek" in slot && "date" in other) {
             const dayOfWeek = new Date(other.date).getDay();
             if (slot.dayOfWeek === dayOfWeek) {
-              errors[i] = `Conflicts with ${new Date(other.date).toLocaleDateString()} ${other.startTime}–${other.endTime}.`;
+              errors[i] = `Conflicts with ${new Date(other.date).toLocaleDateString()} ${format12h(other.startTime)}–${format12h(other.endTime)}.`;
               break;
             }
           }
@@ -182,7 +258,7 @@ export function WorkerProfile() {
           if ("date" in slot && "dayOfWeek" in other) {
             const dayOfWeek = new Date(slot.date).getDay();
             if (dayOfWeek === (other.dayOfWeek as number)) {
-              errors[i] = `Conflicts with ${DAY_NAMES[other.dayOfWeek as number]} ${other.startTime}–${other.endTime}.`;
+              errors[i] = `Conflicts with ${DAY_NAMES[other.dayOfWeek as number]} ${format12h(other.startTime)}–${format12h(other.endTime)}.`;
               break;
             }
           }
@@ -242,7 +318,7 @@ export function WorkerProfile() {
   }
 
   function handleAddSpecificSlot() {
-    const today = new Date().toISOString().split("T")[0];
+    const today = toLocalDateInputValue();
     setEditingAvailability([
       ...editingAvailability,
       { type: "specific", date: today, startTime: "09:00", endTime: "17:00" },
@@ -310,6 +386,14 @@ export function WorkerProfile() {
             <h3 className="text-lg font-semibold">
               {userProfile.firstName} {userProfile.lastName}
             </h3>
+            <button
+              type="button"
+              onClick={startNameRequest}
+              className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-primary-600 hover:text-primary-700"
+            >
+              <Edit2 size={12} />
+              Request name change
+            </button>
             <span
               className={`inline-flex items-center gap-1 text-sm ${
                 userProfile.isVerified ? "text-emerald-600" : "text-amber-600"
@@ -388,6 +472,91 @@ export function WorkerProfile() {
           <p className="text-xs text-slate-400 mt-4">Uploading photo...</p>
         )}
       </div>
+
+      {showNameRequest && (
+        <form onSubmit={submitNameRequest} className="card space-y-4">
+          <div>
+            <h3 className="font-semibold flex items-center gap-2">
+              <IdCard size={18} /> Request Name Change
+            </h3>
+            <p className="text-sm text-slate-500 mt-1">
+              An admin must approve this. Upload a clear photo of you holding an ID.
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label">First Name</label>
+              <input
+                value={nameFirst}
+                onChange={(e) => setNameFirst(e.target.value)}
+                className="input-field"
+              />
+            </div>
+            <div>
+              <label className="label">Last Name</label>
+              <input
+                value={nameLast}
+                onChange={(e) => setNameLast(e.target.value)}
+                className="input-field"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="label">Photo Holding ID</label>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => idCameraInputRef.current?.click()}
+                className="rounded-lg bg-primary-600 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-primary-700"
+              >
+                Take Photo
+              </button>
+              <button
+                type="button"
+                onClick={() => idUploadInputRef.current?.click()}
+                className="rounded-lg border border-slate-200 px-4 py-3 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+              >
+                Choose File
+              </button>
+            </div>
+            <input
+              ref={idCameraInputRef}
+              type="file"
+              accept="image/*"
+              capture="user"
+              onChange={(e) => setIdPhoto(e.target.files?.[0] || null)}
+              className="hidden"
+            />
+            <input
+              ref={idUploadInputRef}
+              type="file"
+              accept="image/*"
+              onChange={(e) => setIdPhoto(e.target.files?.[0] || null)}
+              className="hidden"
+            />
+            <p className="mt-2 text-xs text-slate-500">
+              {idPhoto ? idPhoto.name : "No photo selected yet."}
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="submit"
+              disabled={submittingNameRequest}
+              className="btn-primary flex-1 disabled:opacity-50"
+            >
+              {submittingNameRequest ? "Submitting..." : "Submit Request"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowNameRequest(false)}
+              disabled={submittingNameRequest}
+              className="btn-secondary flex-1"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
 
       {/* Stats Card */}
       <div className="card">
@@ -482,7 +651,7 @@ export function WorkerProfile() {
                             onChange={(e) =>
                               handleSlotChange(i, "date", e.target.value)
                             }
-                            min={new Date().toISOString().split("T")[0]}
+                            min={toLocalDateInputValue()}
                             className={`input-field text-sm mt-1 ${
                               hasError ? "border-red-400" : ""
                             }`}
@@ -494,30 +663,20 @@ export function WorkerProfile() {
                       <label className="text-xs font-medium text-slate-600">
                         Start
                       </label>
-                      <input
-                        type="time"
+                      <TimeInput
                         value={slot.startTime}
-                        onChange={(e) =>
-                          handleSlotChange(i, "startTime", e.target.value)
-                        }
-                        className={`input-field text-sm mt-1 ${
-                          hasError ? "border-red-400" : ""
-                        }`}
+                        onChange={(v) => handleSlotChange(i, "startTime", v)}
+                        className={`mt-1 ${hasError ? "[&>select]:border-red-400" : ""}`}
                       />
                     </div>
                     <div className="flex-1">
                       <label className="text-xs font-medium text-slate-600">
                         End
                       </label>
-                      <input
-                        type="time"
+                      <TimeInput
                         value={slot.endTime}
-                        onChange={(e) =>
-                          handleSlotChange(i, "endTime", e.target.value)
-                        }
-                        className={`input-field text-sm mt-1 ${
-                          hasError ? "border-red-400" : ""
-                        }`}
+                        onChange={(v) => handleSlotChange(i, "endTime", v)}
+                        className={`mt-1 ${hasError ? "[&>select]:border-red-400" : ""}`}
                       />
                     </div>
                     <button
@@ -585,7 +744,7 @@ export function WorkerProfile() {
                         : `${new Date("date" in slot ? (slot.date as string) : "").toLocaleDateString()}`}
                     </span>
                     <span className="text-slate-600">
-                      {slot.startTime} - {slot.endTime}
+                      {format12h(slot.startTime)} - {format12h(slot.endTime)}
                     </span>
                   </div>
                 );
@@ -596,6 +755,42 @@ export function WorkerProfile() {
               </p>
             )}
           </div>
+        )}
+      </div>
+
+      {/* Working Schedule */}
+      <div className="card">
+        <h4 className="font-semibold mb-4 flex items-center gap-2">
+          <Clock size={16} /> Working Schedule
+        </h4>
+
+        {workingSchedule.length > 0 ? (
+          <div className="space-y-2">
+            {workingSchedule.map((slot, i) => (
+              <div
+                key={`${slot.requestId}-${slot.date}-${i}`}
+                className="rounded-lg bg-slate-50 px-3 py-2 text-sm"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-medium text-slate-800">
+                      {slot.categoryName} - {slot.itemName}
+                    </p>
+                    <p className="text-slate-600">
+                      {formatWorkingDate(slot.date)} · {format12h(slot.startTime)} - {format12h(slot.endTime)}
+                    </p>
+                  </div>
+                  <span className="shrink-0 rounded-full bg-primary-50 px-2 py-0.5 text-xs font-medium capitalize text-primary-700">
+                    {formatStatus(slot.status)}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-slate-500">
+            Accepted jobs will appear here after you set their working dates.
+          </p>
         )}
       </div>
 

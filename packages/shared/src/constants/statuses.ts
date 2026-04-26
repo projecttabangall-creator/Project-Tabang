@@ -2,6 +2,7 @@ export const REQUEST_STATUSES = {
   PENDING: "pending",
   ASSIGNED: "assigned",
   ACCEPTED: "accepted",
+  ACCEPTANCE_EXPIRED: "acceptance_expired",
   WORKER_ARRIVED: "worker_arrived",
   PRICE_CONFIRMED: "price_confirmed",
   IN_PROGRESS: "in_progress",

@@ -205,9 +205,11 @@ export function WorkerRegistration() {
         return;
       }
 
-      const message =
-        error.response?.data?.error ||
-        "Failed to register worker or upload credentials";
+      const data = error.response?.data;
+      const details = data?.details as { field: string; message: string }[] | undefined;
+      const message = details?.length
+        ? details.map((d) => d.message).join(", ")
+        : data?.error || "Failed to register worker or upload credentials";
       toast.error(message);
       setIsLoading(false);
     }
@@ -279,6 +281,11 @@ export function WorkerRegistration() {
             <input
               type="date"
               className="input-field"
+              max={(() => {
+                const d = new Date();
+                d.setFullYear(d.getFullYear() - 18);
+                return d.toISOString().split("T")[0];
+              })()}
               {...register("birthday", { required: "Required" })}
             />
             {errors.birthday && (
@@ -522,7 +529,7 @@ export function WorkerRegistration() {
                         className="flex items-center gap-2 px-3 py-2 border border-dashed border-slate-300 rounded-lg text-sm text-slate-500 hover:border-primary-400 hover:text-primary-600 transition-colors"
                       >
                         <Upload size={14} />
-                        Upload Photo
+                        Upload File
                       </button>
                       {credential.file && (
                         <div className="flex items-center gap-2 text-sm text-emerald-600 font-medium">

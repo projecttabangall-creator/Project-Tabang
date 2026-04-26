@@ -4,6 +4,9 @@ import { toast } from "sonner";
 import { Briefcase, Clock, MapPin, Star } from "lucide-react";
 import { BackButton } from "@/components/common/BackButton";
 import api from "@/services/api";
+import { format12h } from "@/utils/time";
+import { useAuth } from "@/contexts/AuthContext";
+import { useRequestCollectionLiveRefresh } from "@/hooks/useRequestLiveRefresh";
 
 interface Request {
   id: string;
@@ -59,24 +62,33 @@ function getStatusLabel(status: string) {
 }
 
 export function WorkerJobHistory() {
+  const { userProfile } = useAuth();
   const [activeTab, setActiveTab] = useState<Tab>("payment");
   const [isLoading, setIsLoading] = useState(true);
   const [requests, setRequests] = useState<Request[]>([]);
 
   useEffect(() => {
-    async function fetchRequests() {
-      try {
-        const { data } = await api.get("/api/requests/my");
-        setRequests(data.requests || []);
-      } catch {
-        toast.error("Failed to load worker job history");
-      } finally {
-        setIsLoading(false);
-      }
-    }
-
     fetchRequests();
   }, []);
+
+  useRequestCollectionLiveRefresh(
+    "assignedWorkerId",
+    "==",
+    userProfile?.uid,
+    fetchRequests,
+    Boolean(userProfile?.uid)
+  );
+
+  async function fetchRequests() {
+    try {
+      const { data } = await api.get("/api/requests/my");
+      setRequests(data.requests || []);
+    } catch {
+      toast.error("Failed to load worker job history");
+    } finally {
+      setIsLoading(false);
+    }
+  }
 
   const groupedRequests = useMemo(
     () => ({
@@ -196,7 +208,7 @@ export function WorkerJobHistory() {
               <div className="grid gap-2 text-xs text-slate-500 sm:grid-cols-2 mb-3">
                 <span className="flex items-center gap-1">
                   <Clock size={14} />
-                  {formatDate(request.schedule?.date)} {request.schedule?.startTime}
+                  {formatDate(request.schedule?.date)} {format12h(request.schedule?.startTime)}
                 </span>
                 <span className="flex items-center gap-1">
                   <MapPin size={14} />

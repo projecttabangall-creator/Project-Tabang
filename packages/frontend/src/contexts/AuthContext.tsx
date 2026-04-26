@@ -8,6 +8,7 @@ import {
 } from "react";
 import {
   onAuthStateChanged,
+  reload,
   signInWithEmailAndPassword,
   signOut as firebaseSignOut,
   User as FirebaseUser,
@@ -16,11 +17,22 @@ import { doc, getDoc, onSnapshot } from "firebase/firestore";
 import { firebaseAuth, firestore } from "@/config/firebase";
 import { UserRole } from "@tabang/shared";
 import { buildAuthEmailCandidates } from "@/utils/phone";
+import api from "@/services/api";
 
 interface AvailabilitySlot {
   dayOfWeek: number;
   startTime: string;
   endTime: string;
+}
+
+interface WorkingScheduleEntry {
+  requestId: string;
+  categoryName: string;
+  itemName: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  status: string;
 }
 
 interface Credential {
@@ -31,12 +43,14 @@ interface Credential {
 }
 
 interface WorkerData {
-  specialization: string;
+  specialization: string | string[];
   credentials: Credential[];
+  biometricEnrolled?: boolean;
   averageRating: number;
   completedJobsCount: number;
   isAvailable: boolean;
   availability: AvailabilitySlot[];
+  workingSchedule?: WorkingScheduleEntry[];
 }
 
 export interface UserProfile {
@@ -56,6 +70,11 @@ export interface UserProfile {
   creditPoints: number;
   mustChangePassword?: boolean;
   profilePhotoUrl?: string;
+  biometricEnrolled?: boolean;
+  lastFingerprintVerification?: {
+    verified: boolean;
+    timestamp?: Date | null;
+  };
   workerData?: WorkerData;
 }
 
@@ -63,7 +82,7 @@ interface AuthContextType {
   firebaseUser: FirebaseUser | null;
   userProfile: UserProfile | null;
   loading: boolean;
-  signIn: (contactNumber: string, password: string) => Promise<void>;
+  signIn: (identifier: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
@@ -134,6 +153,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               creditPoints: data.creditPoints,
               mustChangePassword: Boolean(data.mustChangePassword),
               profilePhotoUrl: data.profilePhotoUrl,
+              biometricEnrolled: Boolean(data.biometricEnrolled),
+              lastFingerprintVerification: data.lastFingerprintVerification
+                ? {
+                    verified: Boolean(data.lastFingerprintVerification.verified),
+                    timestamp: toDate(data.lastFingerprintVerification.timestamp),
+                  }
+                : undefined,
               workerData: data.workerData,
             });
             setLoading(false);
@@ -158,12 +184,50 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Sign in with contact number (converted to email format) and password
-  async function signIn(contactNumber: string, password: string) {
+  async function signIn(identifier: string, password: string) {
+    const trimmedIdentifier = identifier.trim().toLowerCase();
+    const isEmailLogin = trimmedIdentifier.includes("@");
     let lastError: unknown = null;
 
-    for (const email of buildAuthEmailCandidates(contactNumber)) {
+    const candidates = isEmailLogin
+      ? [trimmedIdentifier]
+      : buildAuthEmailCandidates(trimmedIdentifier);
+
+    if (!isEmailLogin) {
       try {
-        await signInWithEmailAndPassword(firebaseAuth, email, password);
+        const response = await api.post("/api/auth/resolve-login-identifier", {
+          contactNumber: trimmedIdentifier,
+        });
+        const resolvedEmail = response.data?.email;
+        if (typeof resolvedEmail === "string" && resolvedEmail.trim()) {
+          candidates.unshift(resolvedEmail.trim().toLowerCase());
+        }
+      } catch {
+        // Fall back to legacy contact-number-derived auth aliases.
+      }
+    }
+
+    for (const email of Array.from(new Set(candidates))) {
+      try {
+        const credential = await signInWithEmailAndPassword(
+          firebaseAuth,
+          email,
+          password
+        );
+
+        await reload(credential.user);
+
+        const userDoc = await getDoc(doc(firestore, "users", credential.user.uid));
+        const profileData = userDoc.data();
+
+        if (
+          profileData?.role === "resident" &&
+          credential.user.emailVerified &&
+          !profileData?.isVerified
+        ) {
+          await api.post("/api/auth/profile/sync-email-verification");
+        }
+
         return;
       } catch (error: any) {
         lastError = error;
@@ -305,6 +369,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         creditPoints: data.creditPoints,
         mustChangePassword: Boolean(data.mustChangePassword),
         profilePhotoUrl: data.profilePhotoUrl,
+        biometricEnrolled: Boolean(data.biometricEnrolled),
+        lastFingerprintVerification: data.lastFingerprintVerification
+          ? {
+              verified: Boolean(data.lastFingerprintVerification.verified),
+              timestamp: toDate(data.lastFingerprintVerification.timestamp),
+            }
+          : undefined,
         workerData: data.workerData,
       });
     }

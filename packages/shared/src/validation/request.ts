@@ -35,14 +35,20 @@ export const specialRequestSchema = createRequestSchema.extend({
   specialRequestNote: z.string().min(1, "Reason for special request is required"),
 });
 
+export const workingScheduleEntrySchema = z.object({
+  date: z.string().min(1, "Date is required"),
+  startTime: z.string().regex(/^\d{2}:\d{2}$/, "Use HH:MM format"),
+  endTime: z.string().regex(/^\d{2}:\d{2}$/, "Use HH:MM format"),
+});
+
 export const setFinalPriceSchema = z.object({
   finalPrice: z.number().positive("Final price must be positive"),
   priceChangeReason: z.string().optional(),
   finalSchedule: z.object({
-    numberOfDays: z.number().int().min(1, "At least 1 day required"),
-    startTime: z.string().regex(/^\d{2}:\d{2}$/, "Use HH:MM format"),
-    endTime: z.string().regex(/^\d{2}:\d{2}$/, "Use HH:MM format"),
-  }).optional(),
+    workingSchedule: z
+      .array(workingScheduleEntrySchema)
+      .min(1, "Select at least one working date"),
+  }),
 });
 
 export const approvePriceOverrideSchema = z.object({

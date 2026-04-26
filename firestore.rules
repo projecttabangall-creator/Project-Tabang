@@ -13,9 +13,13 @@ service cloud.firestore {
     function isAdminUser() {
       return isAuthenticated() && (
         request.auth.token.role == 'admin' ||
+        request.auth.token.role == 'superadmin' ||
         (
           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+          (
+            get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+            get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'superadmin'
+          )
         )
       );
     }
@@ -75,6 +79,11 @@ service cloud.firestore {
       allow read: if isNotificationOwner();
       allow update: if isNotificationOwner() && isNotificationReadUpdate();
       allow create, delete: if false;
+    }
+
+    match /requestSignals/{signalId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if false;
     }
 
     match /systemConfig/{configId} {

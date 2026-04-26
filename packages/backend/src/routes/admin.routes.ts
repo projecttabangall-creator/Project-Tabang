@@ -10,10 +10,12 @@ import {
   getConfig,
   getDashboardStats,
   getIncomeStats,
+  listNameChangeRequests,
   getSystemLogs,
   listPasswordResetRequests,
   listUsers,
   resolvePasswordResetRequest,
+  resolveNameChangeRequest,
   updateConfig,
   updateUserStatus,
 } from "../controllers/admin.controller";
@@ -26,6 +28,8 @@ adminRouter.use(roleGuard("admin"));
 
 adminRouter.get("/dashboard", getDashboardStats);
 adminRouter.get("/users", listUsers);
+adminRouter.get("/name-change-requests", listNameChangeRequests);
+adminRouter.patch("/name-change-requests/:id", resolveNameChangeRequest);
 adminRouter.get("/password-reset-requests", listPasswordResetRequests);
 adminRouter.patch("/password-reset-requests/:id", resolvePasswordResetRequest);
 adminRouter.patch("/users/:id/status", updateUserStatus);

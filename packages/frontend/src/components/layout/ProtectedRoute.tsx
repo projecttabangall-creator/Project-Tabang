@@ -1,6 +1,7 @@
 import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { UserRole } from "@tabang/shared";
+import { isSeedAuthEmail } from "@/utils/auth";
 
 interface ProtectedRouteProps {
   allowedRoles?: UserRole[];
@@ -24,7 +25,12 @@ export function ProtectedRoute({ allowedRoles }: ProtectedRouteProps) {
   }
 
   // Role check
-  if (allowedRoles && !allowedRoles.includes(userProfile.role)) {
+  const effectiveRoles =
+    allowedRoles?.includes("admin")
+      ? Array.from(new Set([...allowedRoles, "superadmin"]))
+      : allowedRoles;
+
+  if (effectiveRoles && !effectiveRoles.includes(userProfile.role)) {
     // Redirect to their role's home page
     const roleHome: Record<string, string> = {
       resident: "/resident/requests",
@@ -33,6 +39,16 @@ export function ProtectedRoute({ allowedRoles }: ProtectedRouteProps) {
       superadmin: "/superadmin/dashboard",
     };
     return <Navigate to={roleHome[userProfile.role] ?? "/"} replace />;
+  }
+
+  if (
+    userProfile.role === "resident" &&
+    firebaseUser.email &&
+    !firebaseUser.emailVerified &&
+    !isSeedAuthEmail(firebaseUser.email) &&
+    location.pathname !== "/verify-email"
+  ) {
+    return <Navigate to="/verify-email" replace />;
   }
 
   if (userProfile.mustChangePassword && location.pathname !== "/change-password") {

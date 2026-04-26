@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
+import { TimeInput } from "@/components/common/TimeInput";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { BackButton } from "@/components/common/BackButton";
@@ -81,6 +82,7 @@ export function RequestService() {
     handleSubmit,
     watch,
     setValue,
+    control,
     formState: { errors },
   } = useForm<RequestFormData>({
     defaultValues: {
@@ -507,7 +509,13 @@ export function RequestService() {
             <input
               type="date"
               className="input-field"
-              {...register("date", { required: "Date is required" })}
+              min={new Date().toISOString().split("T")[0]}
+              {...register("date", {
+                required: "Date is required",
+                validate: (val) =>
+                  val >= new Date().toISOString().split("T")[0] ||
+                  "Date cannot be in the past",
+              })}
             />
             {errors.date && (
               <p className="text-red-500 text-xs mt-1">{errors.date.message}</p>
@@ -539,10 +547,13 @@ export function RequestService() {
                 <label className="label flex items-center gap-1">
                   <Clock size={14} /> Start Time
                 </label>
-                <input
-                  type="time"
-                  className="input-field"
-                  {...register("startTime", { required: "Start time is required" })}
+                <Controller
+                  name="startTime"
+                  control={control}
+                  rules={{ required: "Start time is required" }}
+                  render={({ field }) => (
+                    <TimeInput value={field.value || "08:00"} onChange={field.onChange} />
+                  )}
                 />
                 {errors.startTime && (
                   <p className="text-red-500 text-xs mt-1">
@@ -554,10 +565,13 @@ export function RequestService() {
                 <label className="label flex items-center gap-1">
                   <Clock size={14} /> End Time
                 </label>
-                <input
-                  type="time"
-                  className="input-field"
-                  {...register("endTime", { required: "End time is required" })}
+                <Controller
+                  name="endTime"
+                  control={control}
+                  rules={{ required: "End time is required" }}
+                  render={({ field }) => (
+                    <TimeInput value={field.value || "17:00"} onChange={field.onChange} />
+                  )}
                 />
                 {errors.endTime && (
                   <p className="text-red-500 text-xs mt-1">

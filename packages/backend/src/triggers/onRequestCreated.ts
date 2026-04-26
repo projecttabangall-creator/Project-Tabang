@@ -3,6 +3,7 @@ import { logger } from "firebase-functions";
 import { FieldValue } from "firebase-admin/firestore";
 import { db } from "../config/firebase";
 import { attemptRequestAssignment } from "../services/requestAssignment.service";
+import { bumpPendingRequestPoolSignal } from "../services/requestSignal.service";
 
 export const onRequestCreated = onDocumentCreated(
   "serviceRequests/{requestId}",
@@ -23,6 +24,7 @@ export const onRequestCreated = onDocumentCreated(
 
     try {
       const result = await attemptRequestAssignment(requestId, request);
+      await bumpPendingRequestPoolSignal();
       logger.info(`Initial assignment result for request ${requestId}: ${result}`);
     } catch (error) {
       logger.error(`Failed to auto-assign worker for request ${requestId}:`, error);

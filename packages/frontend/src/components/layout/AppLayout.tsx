@@ -1,6 +1,7 @@
 import { Outlet, NavLink } from "react-router-dom";
 import { MobileNav } from "./MobileNav";
 import { SuspensionOverlay } from "./SuspensionOverlay";
+import { FeedbackSurveyPrompt } from "@/components/common/FeedbackSurveyPrompt";
 import { useAuth } from "@/contexts/AuthContext";
 import { LogOut } from "lucide-react";
 import { getNavItems } from "./navItems";
@@ -99,6 +100,9 @@ export function AppLayout() {
 
       {/* Mobile bottom navigation */}
       <MobileNav unreadCount={unreadCount} />
+
+      {/* Auto-popup feedback survey for residents/workers when admin confirms a payment */}
+      <FeedbackSurveyPrompt />
     </div>
   );
 }

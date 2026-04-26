@@ -113,7 +113,10 @@ async function notifyPendingQueue(requestId: string, requestData: any): Promise<
     });
   }
 
-  const admins = await db.collection("users").where("role", "==", "admin").get();
+  const admins = await db
+    .collection("users")
+    .where("role", "in", ["admin", "superadmin"])
+    .get();
 
   await Promise.all(
     admins.docs.map((adminDoc) =>

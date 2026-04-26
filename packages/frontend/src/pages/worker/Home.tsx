@@ -4,6 +4,11 @@ import { toast } from "sonner";
 import { Briefcase, Clock, Power, Wallet } from "lucide-react";
 import api from "@/services/api";
 import { useAuth } from "@/contexts/AuthContext";
+import { format12hRange } from "@/utils/time";
+import {
+  usePendingRequestPoolLiveRefresh,
+  useRequestCollectionLiveRefresh,
+} from "@/hooks/useRequestLiveRefresh";
 
 interface Request {
   id: string;
@@ -27,6 +32,7 @@ const ONGOING_STATUSES = [
   "completed",
   "payment_submitted",
 ];
+const ROOKIE_JOB_THRESHOLD = 5;
 
 function getStatusLabel(status: string) {
   return status.replace(/_/g, " ").toUpperCase();
@@ -39,6 +45,11 @@ export function WorkerHome() {
   const [isTogglingAvailability, setIsTogglingAvailability] = useState(false);
   const [pendingRequests, setPendingRequests] = useState<Request[]>([]);
   const [ongoingRequests, setOngoingRequests] = useState<Request[]>([]);
+  const [availableRequests, setAvailableRequests] = useState<Request[]>([]);
+
+  const completedJobsCount =
+    (userProfile as any)?.workerData?.completedJobsCount ?? 0;
+  const isRookie = completedJobsCount < ROOKIE_JOB_THRESHOLD;
 
   useEffect(() => {
     if (typeof userProfile?.workerData?.isAvailable === "boolean") {
@@ -50,10 +61,25 @@ export function WorkerHome() {
     fetchRequests();
   }, []);
 
-  const fetchRequests = async () => {
+  useRequestCollectionLiveRefresh(
+    "assignedWorkerId",
+    "==",
+    userProfile?.uid,
+    fetchRequests,
+    Boolean(userProfile?.uid)
+  );
+
+  usePendingRequestPoolLiveRefresh(fetchRequests, isRookie);
+
+  async function fetchRequests() {
     try {
-      const { data } = await api.get("/api/requests/my");
-      const allRequests: Request[] = data.requests || [];
+      const [{ data: mine }, available] = await Promise.all([
+        api.get("/api/requests/my"),
+        isRookie
+          ? api.get("/api/requests/available").catch(() => ({ data: { requests: [] } }))
+          : Promise.resolve({ data: { requests: [] } }),
+      ]);
+      const allRequests: Request[] = mine.requests || [];
 
       setPendingRequests(
         allRequests.filter((request) =>
@@ -63,12 +89,13 @@ export function WorkerHome() {
       setOngoingRequests(
         allRequests.filter((request) => ONGOING_STATUSES.includes(request.status))
       );
+      setAvailableRequests(available.data.requests || []);
     } catch {
       toast.error("Failed to load requests");
     } finally {
       setIsLoading(false);
     }
-  };
+  }
 
   const getLocationOrEmpty = async (): Promise<{ latitude?: number; longitude?: number }> => {
     return new Promise((resolve) => {
@@ -168,7 +195,7 @@ export function WorkerHome() {
       <div className="grid grid-cols-4 gap-4">
         <div className="card text-center">
           <p className="text-2xl font-bold text-primary-600">
-            {pendingRequests.length}
+            {pendingRequests.length + (isRookie ? availableRequests.length : 0)}
           </p>
           <p className="text-sm text-slate-500">Pending Jobs</p>
         </div>
@@ -192,6 +219,56 @@ export function WorkerHome() {
           <p className="text-sm text-slate-500">Withdraw Earnings</p>
         </Link>
       </div>
+
+      {isRookie && availableRequests.length > 0 && (
+        <div className="space-y-3">
+          <h3 className="text-lg font-semibold flex items-center gap-2">
+            <Briefcase size={20} /> Open Pending Pool
+          </h3>
+          <p className="text-xs text-slate-500 -mt-1">
+            No worker has accepted these yet. First-come, first-served while you build up
+            your job count ({completedJobsCount}/{ROOKIE_JOB_THRESHOLD}).
+          </p>
+          <div className="space-y-3">
+            {availableRequests.map((request) => (
+              <Link
+                key={request.id}
+                to={`/worker/job/${request.id}`}
+                className="card block border-yellow-200 hover:border-yellow-400 transition-colors"
+              >
+                <div className="flex items-start justify-between mb-3">
+                  <div>
+                    <p className="font-semibold">{request.categoryName}</p>
+                    <p className="text-sm text-slate-600">{request.itemName}</p>
+                  </div>
+                  <p className="text-lg font-bold text-primary-600">
+                    PHP {request.suggestedPrice}
+                  </p>
+                </div>
+                <p className="text-sm text-slate-700 mb-3 line-clamp-2">
+                  {request.description}
+                </p>
+                <div className="flex items-center gap-4 text-xs text-slate-500 mb-3">
+                  <span className="flex items-center gap-1">
+                    <Clock size={14} />
+                    {request.schedule.startTime
+                      ? format12hRange(request.schedule.startTime, request.schedule.endTime)
+                      : "No specified time"}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+                  <p className="text-xs text-slate-400">
+                    From: {request.residentName}
+                  </p>
+                  <span className="text-xs bg-yellow-50 text-yellow-700 px-2 py-1 rounded">
+                    Claim job
+                  </span>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       {pendingRequests.length > 0 && (
         <div className="space-y-3">
@@ -237,7 +314,7 @@ export function WorkerHome() {
                 <div className="flex items-center gap-4 text-xs text-slate-500 mb-3">
                   <span className="flex items-center gap-1">
                     <Clock size={14} />
-                    {request.schedule.startTime ? `${request.schedule.startTime} - ${request.schedule.endTime}` : "No specified time"}
+                    {request.schedule.startTime ? format12hRange(request.schedule.startTime, request.schedule.endTime) : "No specified time"}
                   </span>
                 </div>
 
@@ -281,7 +358,7 @@ export function WorkerHome() {
                 <div className="flex items-center gap-4 text-xs text-slate-500 mb-3">
                   <span className="flex items-center gap-1">
                     <Clock size={14} />
-                    {request.schedule.startTime ? `${request.schedule.startTime} - ${request.schedule.endTime}` : "No specified time"}
+                    {request.schedule.startTime ? format12hRange(request.schedule.startTime, request.schedule.endTime) : "No specified time"}
                   </span>
                 </div>
 
@@ -299,7 +376,9 @@ export function WorkerHome() {
         </div>
       )}
 
-      {pendingRequests.length === 0 && ongoingRequests.length === 0 && (
+      {pendingRequests.length === 0 &&
+        ongoingRequests.length === 0 &&
+        availableRequests.length === 0 && (
         <div className="card text-center py-12">
           <Briefcase size={48} className="mx-auto text-slate-300 mb-4" />
           <p className="text-slate-500 font-medium">No jobs assigned yet</p>

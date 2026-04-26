@@ -4,11 +4,13 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { BackButton } from "@/components/common/BackButton";
+import { firebaseAuth } from "@/config/firebase";
 import logoWithText from "@Assets/logo-with-text.png";
 import { normalizePhilippinePhoneNumber } from "@/utils/phone";
+import { isSeedAuthEmail } from "@/utils/auth";
 
 interface LoginForm {
-  contactNumber: string;
+  identifier: string;
   password: string;
 }
 
@@ -24,8 +26,13 @@ export function Login() {
     formState: { errors },
   } = useForm<LoginForm>();
 
-  function normalizePhoneInput(value: string) {
-    const raw = value.replace(/[^\d+]/g, "");
+  function normalizeIdentifierInput(value: string) {
+    const trimmed = value.trimStart();
+    if (/[a-zA-Z@._-]/.test(trimmed)) {
+      return trimmed;
+    }
+
+    const raw = trimmed.replace(/[^\d+]/g, "");
     const maxLen = raw.startsWith("+") ? 13 : 11;
     return raw.slice(0, maxLen);
   }
@@ -35,11 +42,23 @@ export function Login() {
     setNotFound(false);
     try {
       await signIn(
-        normalizePhilippinePhoneNumber(data.contactNumber, "local"),
+        data.identifier.includes("@")
+          ? data.identifier.trim().toLowerCase()
+          : normalizePhilippinePhoneNumber(data.identifier, "local"),
         data.password
       );
+
+      if (
+        firebaseAuth.currentUser?.email &&
+        !firebaseAuth.currentUser.emailVerified &&
+        !isSeedAuthEmail(firebaseAuth.currentUser.email)
+      ) {
+        toast.info("Verify your email to continue.");
+        navigate("/verify-email");
+        return;
+      }
+
       toast.success("Logged in successfully");
-      // AuthContext will detect the user and redirect via ProtectedRoute
       navigate("/");
     } catch (error: any) {
       if (error.code === "auth/invalid-credential") {
@@ -79,30 +98,37 @@ export function Login() {
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <div>
-              <label htmlFor="contactNumber" className="label">
-                Contact Number
+              <label htmlFor="identifier" className="label">
+                Email or Contact Number
               </label>
               <input
-                id="contactNumber"
-                type="tel"
-                placeholder="09171234567"
+                id="identifier"
+                type="text"
+                placeholder="you@example.com or 09171234567"
                 className="input-field"
-                {...register("contactNumber", {
-                  required: "Contact number is required",
-                  pattern: {
-                    value: /^(\+63|0)\d{10}$/,
-                    message: "Enter a valid PH number (e.g. 09171234567)",
+                {...register("identifier", {
+                  required: "Email or contact number is required",
+                  validate: (value) => {
+                    if (/[a-zA-Z@._-]/.test(value.trim())) {
+                      return (
+                        /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim()) ||
+                        "Enter a valid email address"
+                      );
+                    }
+                    return (
+                      /^(\+63|0)\d{10}$/.test(value) ||
+                      "Enter a valid PH number (e.g. 09171234567)"
+                    );
                   },
                   onChange: (e) => {
-                    e.target.value = normalizePhoneInput(e.target.value);
+                    e.target.value = normalizeIdentifierInput(e.target.value);
                   },
                 })}
-                inputMode="tel"
-                maxLength={13}
+                inputMode="email"
               />
-              {errors.contactNumber && (
+              {errors.identifier && (
                 <p className="text-red-500 text-xs mt-1">
-                  {errors.contactNumber.message}
+                  {errors.identifier.message}
                 </p>
               )}
             </div>
@@ -143,7 +169,7 @@ export function Login() {
             {notFound && (
               <div className="mt-4 rounded-lg bg-red-50 border border-red-200 p-4 text-center">
                 <p className="text-sm font-medium text-red-700">
-                  Invalid contact number or password.
+                  Invalid email/contact number or password.
                 </p>
                 <p className="text-sm text-red-600 mt-1">
                   Please check your number and password, or{" "}

@@ -5,6 +5,7 @@ import { FieldValue, Timestamp } from "firebase-admin/firestore";
 
 const usersRef = db.collection("users");
 const passwordResetRequestsRef = db.collection("passwordResetRequests");
+const nameChangeRequestsRef = db.collection("nameChangeRequests");
 
 function generateTemporaryPassword(length = 12): string {
   const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
@@ -126,6 +127,7 @@ export async function listUsers(
         accountStatus: data.accountStatus,
         suspendReason: data.suspendReason,
         suspendUntil: data.suspendUntil ? toDate(data.suspendUntil) : null,
+        pendingNameChangeRequestId: data.pendingNameChangeRequestId || null,
         createdAt: data.createdAt,
       };
     });
@@ -134,6 +136,122 @@ export async function listUsers(
   } catch (error) {
     console.error("List users error:", error);
     res.status(500).json({ error: "Failed to fetch users" });
+  }
+}
+
+export async function listNameChangeRequests(
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> {
+  try {
+    const statusFilter = typeof req.query.status === "string" ? req.query.status : "pending";
+    const snapshot = await nameChangeRequestsRef.get();
+
+    const requests = snapshot.docs
+      .map((doc) => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          userId: data.userId,
+          role: data.role,
+          currentFirstName: data.currentFirstName,
+          currentLastName: data.currentLastName,
+          requestedFirstName: data.requestedFirstName,
+          requestedLastName: data.requestedLastName,
+          contactNumber: data.contactNumber || "",
+          email: data.email || "",
+          idPhotoUrl: data.idPhotoUrl || "",
+          status: data.status || "pending",
+          requestedAt: toDate(data.requestedAt),
+          resolvedAt: toDate(data.resolvedAt),
+          resolvedBy: data.resolvedBy || null,
+          resolutionNote: data.resolutionNote || "",
+        };
+      })
+      .filter((request) => statusFilter === "all" || request.status === statusFilter)
+      .sort(
+        (a, b) =>
+          (b.requestedAt?.getTime() ?? 0) - (a.requestedAt?.getTime() ?? 0)
+      );
+
+    res.json({ requests });
+  } catch (error) {
+    console.error("List name change requests error:", error);
+    res.status(500).json({ error: "Failed to fetch name change requests" });
+  }
+}
+
+export async function resolveNameChangeRequest(
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> {
+  const requestId = req.params.id as string;
+  const action = req.body?.action;
+  const resolutionNote =
+    typeof req.body?.resolutionNote === "string" ? req.body.resolutionNote.trim() : "";
+
+  if (!["approve", "reject"].includes(action)) {
+    res.status(400).json({ error: "Invalid action" });
+    return;
+  }
+
+  try {
+    const requestRef = nameChangeRequestsRef.doc(requestId);
+    const requestDoc = await requestRef.get();
+
+    if (!requestDoc.exists) {
+      res.status(404).json({ error: "Name change request not found" });
+      return;
+    }
+
+    const requestData = requestDoc.data()!;
+
+    if (requestData.status !== "pending") {
+      res.status(400).json({ error: "Name change request has already been processed" });
+      return;
+    }
+
+    const userRef = usersRef.doc(requestData.userId);
+    const userDoc = await userRef.get();
+
+    if (!userDoc.exists) {
+      res.status(404).json({ error: "User account no longer exists" });
+      return;
+    }
+
+    if (action === "approve") {
+      await userRef.update({
+        firstName: requestData.requestedFirstName,
+        lastName: requestData.requestedLastName,
+        pendingNameChangeRequestId: FieldValue.delete(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    } else {
+      await userRef.update({
+        pendingNameChangeRequestId: FieldValue.delete(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    }
+
+    await requestRef.update({
+      status: action === "approve" ? "approved" : "rejected",
+      resolvedAt: FieldValue.serverTimestamp(),
+      resolvedBy: req.user!.uid,
+      resolutionNote,
+    });
+
+    await db.collection("systemLogs").add({
+      action: action === "approve" ? "name_change_request_approved" : "name_change_request_rejected",
+      performedBy: req.user!.uid,
+      targetUserId: requestData.userId,
+      details: `${action === "approve" ? "Approved" : "Rejected"} name change from ${requestData.currentFirstName} ${requestData.currentLastName} to ${requestData.requestedFirstName} ${requestData.requestedLastName}`,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+
+    res.json({ message: `Name change request ${action === "approve" ? "approved" : "rejected"}` });
+  } catch (error) {
+    console.error("Resolve name change request error:", error);
+    res.status(500).json({ error: "Failed to resolve name change request" });
   }
 }
 
@@ -663,7 +781,10 @@ export async function getAnalyticsStats(
           (req) => req.data().status === "payment_confirmed"
         ).length;
         const acceptedCount = workerRequests.filter(
-          (req) => req.data().status !== "pending" && req.data().status !== "assigned"
+          (req) =>
+            req.data().status !== "pending" &&
+            req.data().status !== "assigned" &&
+            req.data().status !== "acceptance_expired"
         ).length;
         const acceptanceRate =
           workerRequests.length > 0

@@ -294,7 +294,10 @@ export async function fileDispute(
       updatedAt: FieldValue.serverTimestamp(),
     });
 
-    const admins = await db.collection("users").where("role", "==", "admin").get();
+    const admins = await db
+      .collection("users")
+      .where("role", "in", ["admin", "superadmin"])
+      .get();
     for (const adminDoc of admins.docs) {
       await db.collection("notifications").add({
         userId: adminDoc.id,
@@ -420,7 +423,8 @@ export async function getDispute(
     if (
       userId !== data.filedBy &&
       userId !== data.filedAgainst &&
-      req.user!.role !== "admin"
+      req.user!.role !== "admin" &&
+      req.user!.role !== "superadmin"
     ) {
       res.status(403).json({ error: "Access denied" });
       return;

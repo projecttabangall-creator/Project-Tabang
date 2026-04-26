@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { Shield, Star, Phone, Mail, Lock, Camera, Edit2 } from "lucide-react";
+import { Shield, Star, Phone, Mail, Lock, Camera, Edit2, IdCard } from "lucide-react";
 import { toast } from "sonner";
 import { uploadFile } from "@/utils/uploadFile";
 import api from "@/services/api";
@@ -13,7 +13,14 @@ export function ResidentProfile() {
   const [emailValue, setEmailValue] = useState("");
   const [emailError, setEmailError] = useState("");
   const [savingEmail, setSavingEmail] = useState(false);
+  const [showNameRequest, setShowNameRequest] = useState(false);
+  const [nameFirst, setNameFirst] = useState("");
+  const [nameLast, setNameLast] = useState("");
+  const [idPhoto, setIdPhoto] = useState<File | null>(null);
+  const [submittingNameRequest, setSubmittingNameRequest] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const idUploadInputRef = useRef<HTMLInputElement>(null);
+  const idCameraInputRef = useRef<HTMLInputElement>(null);
 
   if (!userProfile) return null;
 
@@ -73,6 +80,45 @@ export function ResidentProfile() {
     }
   }
 
+  function startNameRequest() {
+    setNameFirst(userProfile?.firstName || "");
+    setNameLast(userProfile?.lastName || "");
+    setIdPhoto(null);
+    setShowNameRequest(true);
+  }
+
+  async function submitNameRequest(e: React.FormEvent) {
+    e.preventDefault();
+    if (!nameFirst.trim() || !nameLast.trim()) {
+      toast.error("Enter your requested first and last name.");
+      return;
+    }
+    if (!idPhoto) {
+      toast.error("Upload a photo of you holding an ID.");
+      return;
+    }
+
+    setSubmittingNameRequest(true);
+    try {
+      const idPhotoUrl = await uploadFile(
+        `users/${userProfile!.uid}/name-change-id-${Date.now()}.jpg`,
+        idPhoto
+      );
+      await api.post("/api/auth/profile/name-change-request", {
+        firstName: nameFirst.trim(),
+        lastName: nameLast.trim(),
+        idPhotoUrl,
+      });
+      await refreshProfile();
+      setShowNameRequest(false);
+      toast.success("Name change request submitted for admin review.");
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || "Failed to submit name change request");
+    } finally {
+      setSubmittingNameRequest(false);
+    }
+  }
+
   return (
     <div className="max-w-lg mx-auto">
       <BackButton to="/resident/requests" label="Back" />
@@ -116,6 +162,14 @@ export function ResidentProfile() {
                 <Lock size={14} className="text-slate-400" />
               )}
             </h3>
+            <button
+              type="button"
+              onClick={startNameRequest}
+              className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-primary-600 hover:text-primary-700"
+            >
+              <Edit2 size={12} />
+              Request name change
+            </button>
             <span
               className={`inline-flex items-center gap-1 text-sm ${
                 userProfile.isVerified ? "text-emerald-600" : "text-amber-600"
@@ -192,6 +246,91 @@ export function ResidentProfile() {
           <p className="text-xs text-slate-400 mt-4">Uploading photo...</p>
         )}
       </div>
+
+      {showNameRequest && (
+        <form onSubmit={submitNameRequest} className="card mt-4 space-y-4">
+          <div>
+            <h3 className="font-semibold flex items-center gap-2">
+              <IdCard size={18} /> Request Name Change
+            </h3>
+            <p className="text-sm text-slate-500 mt-1">
+              An admin must approve this. Upload a clear photo of you holding an ID.
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label">First Name</label>
+              <input
+                value={nameFirst}
+                onChange={(e) => setNameFirst(e.target.value)}
+                className="input-field"
+              />
+            </div>
+            <div>
+              <label className="label">Last Name</label>
+              <input
+                value={nameLast}
+                onChange={(e) => setNameLast(e.target.value)}
+                className="input-field"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="label">Photo Holding ID</label>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => idCameraInputRef.current?.click()}
+                className="rounded-lg bg-primary-600 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-primary-700"
+              >
+                Take Photo
+              </button>
+              <button
+                type="button"
+                onClick={() => idUploadInputRef.current?.click()}
+                className="rounded-lg border border-slate-200 px-4 py-3 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+              >
+                Choose File
+              </button>
+            </div>
+            <input
+              ref={idCameraInputRef}
+              type="file"
+              accept="image/*"
+              capture="user"
+              onChange={(e) => setIdPhoto(e.target.files?.[0] || null)}
+              className="hidden"
+            />
+            <input
+              ref={idUploadInputRef}
+              type="file"
+              accept="image/*"
+              onChange={(e) => setIdPhoto(e.target.files?.[0] || null)}
+              className="hidden"
+            />
+            <p className="mt-2 text-xs text-slate-500">
+              {idPhoto ? idPhoto.name : "No photo selected yet."}
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="submit"
+              disabled={submittingNameRequest}
+              className="btn-primary flex-1 disabled:opacity-50"
+            >
+              {submittingNameRequest ? "Submitting..." : "Submit Request"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowNameRequest(false)}
+              disabled={submittingNameRequest}
+              className="btn-secondary flex-1"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
     </div>
   );
 }

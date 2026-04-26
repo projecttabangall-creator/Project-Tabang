@@ -1,9 +1,14 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import {
+  sendEmailVerification,
+  signInWithEmailAndPassword,
+} from "firebase/auth";
 import api from "@/services/api";
 import { BackButton } from "@/components/common/BackButton";
+import { firebaseAuth } from "@/config/firebase";
 import logoWithText from "@Assets/logo-with-text.png";
 import { normalizePhilippinePhoneNumber } from "@/utils/phone";
 
@@ -11,6 +16,7 @@ interface RegisterForm {
   firstName: string;
   lastName: string;
   middleInitial: string;
+  email: string;
   contactNumber: string;
   password: string;
   confirmPassword: string;
@@ -23,6 +29,7 @@ interface RegisterForm {
 export function Register() {
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
+  const [emailRecentlySent, setEmailRecentlySent] = useState(false);
 
   const {
     register,
@@ -37,6 +44,16 @@ export function Register() {
 
   const password = watch("password");
 
+  useEffect(() => {
+    if (!emailRecentlySent) return;
+
+    const timeout = window.setTimeout(() => {
+      setEmailRecentlySent(false);
+    }, 5000);
+
+    return () => window.clearTimeout(timeout);
+  }, [emailRecentlySent]);
+
   async function onSubmit(data: RegisterForm) {
     setIsLoading(true);
     try {
@@ -48,6 +65,7 @@ export function Register() {
         firstName: data.firstName,
         lastName: data.lastName,
         middleInitial: data.middleInitial,
+        email: data.email.trim().toLowerCase(),
         contactNumber: normalizedContactNumber,
         password: data.password,
         address: {
@@ -58,8 +76,16 @@ export function Register() {
         },
       });
 
-      toast.success("Registration successful. You can now sign in.");
-      navigate("/login");
+      const credential = await signInWithEmailAndPassword(
+        firebaseAuth,
+        data.email.trim().toLowerCase(),
+        data.password
+      );
+      await sendEmailVerification(credential.user);
+      setEmailRecentlySent(true);
+
+      toast.success("Registration successful. Check your email to verify your account.");
+      navigate("/verify-email", { replace: true });
     } catch (error: any) {
       const message =
         error.response?.data?.error || "Registration failed. Please try again.";
@@ -153,6 +179,31 @@ export function Register() {
                   </p>
                 )}
               </div>
+            </div>
+
+            <div>
+              <label htmlFor="email" className="label">
+                Email Address
+              </label>
+              <input
+                id="email"
+                type="email"
+                placeholder="you@example.com"
+                className="input-field"
+                autoComplete="email"
+                {...register("email", {
+                  required: "Required",
+                  pattern: {
+                    value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+                    message: "Enter a valid email address",
+                  },
+                })}
+              />
+              {errors.email && (
+                <p className="text-red-500 text-xs mt-1">
+                  {errors.email.message}
+                </p>
+              )}
             </div>
 
             {/* Contact */}

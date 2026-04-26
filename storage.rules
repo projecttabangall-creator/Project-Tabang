@@ -7,7 +7,10 @@ service firebase.storage {
     }
 
     function isAdmin() {
-      return isAuthenticated() && request.auth.token.role == 'admin';
+      return isAuthenticated() && (
+        request.auth.token.role == 'admin' ||
+        request.auth.token.role == 'superadmin'
+      );
     }
 
     match /requests/{requestId}/photos/{fileName} {

@@ -16,6 +16,70 @@ import {
 const usersRef = db.collection("users");
 const CONTACT_ALREADY_REGISTERED_ERROR = "Contact number already registered";
 
+function isValidDateString(value: string): boolean {
+  const date = new Date(`${value}T00:00:00`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().startsWith(value);
+}
+
+function getPhilippinesDateString(date = new Date()): string {
+  const parts = new Intl.DateTimeFormat("en", {
+    timeZone: "Asia/Manila",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
+function validateAvailabilitySchedule(availability: unknown): string | null {
+  if (!Array.isArray(availability)) {
+    return "Availability must be an array";
+  }
+
+  const today = getPhilippinesDateString();
+
+  for (const slot of availability) {
+    if (!slot || typeof slot !== "object") {
+      return "Each availability slot must be an object";
+    }
+
+    const data = slot as Record<string, any>;
+    const startTime = typeof data.startTime === "string" ? data.startTime : "";
+    const endTime = typeof data.endTime === "string" ? data.endTime : "";
+
+    if (!startTime || !endTime || startTime >= endTime) {
+      return "Availability start time must be before end time";
+    }
+
+    const slotType = typeof data.type === "string" ? data.type : "recurring";
+
+    if (slotType === "specific") {
+      if (typeof data.date !== "string" || !isValidDateString(data.date)) {
+        return "Specific availability date is invalid";
+      }
+
+      if (data.date < today) {
+        return "Specific availability date cannot be in the past";
+      }
+    } else if (slotType === "recurring") {
+      if (
+        typeof data.dayOfWeek !== "number" ||
+        !Number.isInteger(data.dayOfWeek) ||
+        data.dayOfWeek < 0 ||
+        data.dayOfWeek > 6
+      ) {
+        return "Recurring availability day is invalid";
+      }
+    } else {
+      return "Availability slot type is invalid";
+    }
+  }
+
+  return null;
+}
+
 function toSpecArray(val: string | string[] | undefined): string[] {
   if (!val) return [];
   return Array.isArray(val) ? val : [val];
@@ -592,6 +656,12 @@ export async function updateSchedule(
 
     if (!doc.exists) {
       res.status(404).json({ error: "Worker not found" });
+      return;
+    }
+
+    const validationError = validateAvailabilitySchedule(availability);
+    if (validationError) {
+      res.status(400).json({ error: validationError });
       return;
     }
 

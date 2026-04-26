@@ -18,7 +18,7 @@ export function roleGuard(...allowedRoles: UserRole[]) {
 
     // superadmin inherits all admin permissions automatically
     const effectiveRoles: UserRole[] = allowedRoles.includes("admin")
-      ? [...allowedRoles, "superadmin"]
+      ? Array.from(new Set([...allowedRoles, "superadmin"]))
       : allowedRoles;
 
     if (!effectiveRoles.includes(req.user.role)) {

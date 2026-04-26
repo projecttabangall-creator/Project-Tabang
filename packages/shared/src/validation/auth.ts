@@ -15,6 +15,7 @@ export const registerResidentSchema = z.object({
   firstName: z.string().min(1, "First name is required"),
   lastName: z.string().min(1, "Last name is required"),
   middleInitial: z.string().max(3).optional(),
+  email: z.string().trim().email("Valid email is required"),
   contactNumber: z
     .string()
     .min(10, "Contact number must be at least 10 digits")
@@ -31,14 +32,25 @@ export const registerResidentSchema = z.object({
 export const registerWorkerSchema = z.object({
   firstName: z.string().min(1, "First name is required"),
   lastName: z.string().min(1, "Last name is required"),
-  middleInitial: z.string().max(1).optional(),
-  birthday: z.string().min(1, "Birthday is required"),
+  middleInitial: z.string().max(3).optional(),
+  birthday: z
+    .string()
+    .min(1, "Birthday is required")
+    .refine((val) => {
+      const birth = new Date(val);
+      if (isNaN(birth.getTime())) return false;
+      const today = new Date();
+      const age = today.getFullYear() - birth.getUTCFullYear();
+      const m = today.getMonth() - birth.getUTCMonth();
+      const adjustedAge = m < 0 || (m === 0 && today.getDate() < birth.getUTCDate()) ? age - 1 : age;
+      return adjustedAge >= 18;
+    }, "Worker must be at least 18 years old"),
   specialization: z.array(z.string()).min(1, "At least one specialization is required"),
   contactNumber: z
     .string()
     .min(10, "Contact number must be at least 10 digits")
     .regex(/^(\+63|0)\d{10}$/, "Invalid Philippine phone number format"),
-  email: z.string().email("Invalid email").optional().or(z.literal("")),
+  email: z.union([z.string().email("Invalid email"), z.literal(""), z.undefined()]).optional(),
   password: z.string().min(8, "Password must be at least 8 characters"),
   address: z.object({
     street: z.string().min(1, "Street is required"),
@@ -62,6 +74,13 @@ export const loginSchema = z.object({
   password: z.string().min(1, "Password is required"),
 });
 
+export const resolveLoginIdentifierSchema = z.object({
+  contactNumber: z
+    .string()
+    .min(1, "Contact number is required")
+    .regex(/^(\+63|0)\d{10}$/, "Invalid Philippine phone number format"),
+});
+
 export const requestPasswordResetSchema = z.object({
   firstName: z.string().min(1, "First name is required"),
   lastName: z.string().min(1, "Last name is required"),
@@ -77,8 +96,18 @@ export const changePasswordSchema = z.object({
   newPassword: z.string().min(8, "Password must be at least 8 characters"),
 });
 
+export const updateBiometricEnrollmentSchema = z.object({
+  biometricEnrolled: z.boolean(),
+});
+
 export type RegisterResidentInput = z.infer<typeof registerResidentSchema>;
 export type RegisterWorkerInput = z.infer<typeof registerWorkerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
+export type ResolveLoginIdentifierInput = z.infer<
+  typeof resolveLoginIdentifierSchema
+>;
 export type RequestPasswordResetInput = z.infer<typeof requestPasswordResetSchema>;
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
+export type UpdateBiometricEnrollmentInput = z.infer<
+  typeof updateBiometricEnrollmentSchema
+>;

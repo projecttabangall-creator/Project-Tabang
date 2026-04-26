@@ -9,6 +9,7 @@ import { Login } from "@/pages/auth/Login";
 import { Register } from "@/pages/auth/Register";
 import { ForgotPassword } from "@/pages/auth/ForgotPassword";
 import { ChangePassword } from "@/pages/auth/ChangePassword";
+import { VerifyEmail } from "@/pages/auth/VerifyEmail";
 
 // Public pages
 import { Landing } from "@/pages/Landing";
@@ -60,9 +61,11 @@ import { AdminRegistration } from "@/pages/superadmin/AdminRegistration";
 import { Notifications } from "@/pages/Notifications";
 import { SubmitPayment } from "@/pages/resident/SubmitPayment";
 import { FileDispute } from "@/pages/shared/FileDispute";
+import { FeedbackReview } from "@/pages/admin/FeedbackReview";
+import { isSeedAuthEmail } from "@/utils/auth";
 
 function RoleRedirect() {
-  const { userProfile, loading } = useAuth();
+  const { firebaseUser, userProfile, loading } = useAuth();
 
   if (loading) {
     return (
@@ -73,6 +76,15 @@ function RoleRedirect() {
   }
 
   if (!userProfile) return <Landing />;
+
+  if (
+    userProfile.role === "resident" &&
+    firebaseUser?.email &&
+    !firebaseUser.emailVerified &&
+    !isSeedAuthEmail(firebaseUser.email)
+  ) {
+    return <Navigate to="/verify-email" replace />;
+  }
 
   switch (userProfile.role) {
     case "resident":
@@ -101,6 +113,7 @@ export default function App() {
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route element={<ProtectedRoute />}>
             <Route path="/change-password" element={<ChangePassword />} />
+            <Route path="/verify-email" element={<VerifyEmail />} />
           </Route>
 
           {/* Root redirect based on role */}
@@ -158,6 +171,7 @@ export default function App() {
               <Route path="/admin/emergencies" element={<EmergencyList />} />
               <Route path="/admin/emergencies/new" element={<EmergencyCreate />} />
               <Route path="/admin/emergencies/:emergencyId" element={<EmergencyDetail />} />
+              <Route path="/admin/feedback" element={<FeedbackReview />} />
             </Route>
           </Route>
 

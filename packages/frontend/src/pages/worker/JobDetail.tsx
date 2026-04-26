@@ -4,17 +4,22 @@ import { toast } from "sonner";
 import { BackButton } from "@/components/common/BackButton";
 import {
   AlertTriangle,
+  Calendar,
   CheckCircle,
   Clock,
   MapPin,
   Navigation,
   Phone,
+  Plus,
   User,
   XCircle,
 } from "lucide-react";
 import { MapContainer, Marker, Polyline, TileLayer, useMap } from "react-leaflet";
 import L from "leaflet";
 import api from "@/services/api";
+import { TimeInput } from "@/components/common/TimeInput";
+import { format12hRange } from "@/utils/time";
+import { useRequestDocumentLiveRefresh } from "@/hooks/useRequestLiveRefresh";
 
 interface Request {
   id: string;
@@ -31,13 +36,20 @@ interface Request {
   tipAmount?: number;
   priceChangeReason?: string;
   location: any;
-  schedule: { date: any; startTime: string; endTime: string; numberOfDays?: number };
+  schedule: {
+    date: any;
+    startTime: string;
+    endTime: string;
+    numberOfDays?: number;
+    workingSchedule?: Array<{ date: string; startTime: string; endTime: string }>;
+  };
   status: string;
   residentName: string;
   residentPhone: string;
   photoUrls?: string[];
   proofOfWorkPhotoUrls?: string[];
   priceOverrideRequired?: boolean;
+  assignedWorkerId?: string;
 }
 
 const getLat = (location: any) =>
@@ -48,6 +60,36 @@ const formatDate = (value: any) =>
   typeof value === "object" && value?._seconds
     ? new Date(value._seconds * 1000).toLocaleDateString()
     : String(value);
+const toDateInputValue = (value: any) =>
+  typeof value === "object" && value?._seconds
+    ? new Date(value._seconds * 1000).toISOString().split("T")[0]
+    : String(value || toLocalDateInputValue());
+const formatReadableDate = (date: string) =>
+  new Date(`${date}T00:00:00`).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    weekday: "short",
+  });
+const toLocalDateInputValue = (date = new Date()) => {
+  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return localDate.toISOString().split("T")[0];
+};
+const addDaysToInputDate = (date: string, days: number) => {
+  const base = new Date(`${date}T00:00:00`);
+  base.setDate(base.getDate() + days);
+  return toLocalDateInputValue(base);
+};
+const normalizeFutureDates = (dates: string[]) => {
+  const today = toLocalDateInputValue();
+  return [...new Set(dates.filter((date) => date && date >= today))].sort();
+};
+const getInitialWorkingDates = (requestDate: string, savedDates: string[] = []) => {
+  const futureSavedDates = normalizeFutureDates(savedDates);
+  if (futureSavedDates.length > 0) return futureSavedDates;
+
+  const today = toLocalDateInputValue();
+  return [requestDate >= today ? requestDate : today];
+};
 
 const DISPUTABLE_STATUSES = [
   "price_confirmed",
@@ -91,21 +133,24 @@ export function JobDetail() {
   const [showPriceForm, setShowPriceForm] = useState(false);
   const [showSummary, setShowSummary] = useState(false);
   const [capacityConfirmed, setCapacityConfirmed] = useState(false);
-  const [numDays, setNumDays] = useState("1");
-  const [scheduleStart, setScheduleStart] = useState("08:00");
-  const [scheduleEnd, setScheduleEnd] = useState("17:00");
+  const [selectedWorkingDates, setSelectedWorkingDates] = useState<string[]>([]);
+  const [workingStart, setWorkingStart] = useState("08:00");
+  const [workingEnd, setWorkingEnd] = useState("17:00");
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [cancelSubmitting, setCancelSubmitting] = useState(false);
   const [workerLocation, setWorkerLocation] = useState<[number, number] | null>(null);
   const [routeCoords, setRouteCoords] = useState<[number, number][]>([]);
   const [routeInfo, setRouteInfo] = useState<{ distance: number; duration: number } | null>(null);
   const [locationStatus, setLocationStatus] = useState<"idle" | "loading" | "granted" | "denied">("idle");
+  const [visibleDateCount, setVisibleDateCount] = useState(3);
 
   useEffect(() => {
     fetchRequest();
   }, [jobId]);
 
-  const fetchRequest = async () => {
+  useRequestDocumentLiveRefresh(jobId, fetchRequest, Boolean(jobId));
+
+  async function fetchRequest() {
     try {
       const { data } = await api.get(`/api/requests/${jobId}`);
       const currentRequest = data.request || null;
@@ -120,6 +165,30 @@ export function JobDetail() {
       }
 
       setPriceChangeReason(currentRequest?.priceChangeReason || "");
+
+      if (["assigned", "worker_arrived"].includes(currentRequest?.status)) {
+        const requestedDate = toDateInputValue(currentRequest.schedule?.date);
+        const savedWorkingDates = currentRequest.schedule?.workingSchedule?.map(
+          (slot: { date: string }) => slot.date
+        );
+        const initial = getInitialWorkingDates(requestedDate, savedWorkingDates);
+        setSelectedWorkingDates(initial);
+        // Expand the visible window so any pre-selected dates remain visible.
+        const today = toLocalDateInputValue();
+        const maxOffset = initial.reduce((acc, date) => {
+          if (date < today) return acc;
+          const days = Math.round(
+            (new Date(`${date}T00:00:00`).getTime() -
+              new Date(`${today}T00:00:00`).getTime()) /
+              86400000
+          );
+          return Math.max(acc, days);
+        }, 0);
+        const needed = maxOffset + 1;
+        setVisibleDateCount((c) => Math.max(c, Math.max(3, needed)));
+        setWorkingStart(currentRequest.schedule?.startTime || "08:00");
+        setWorkingEnd(currentRequest.schedule?.endTime || "17:00");
+      }
     } catch (error: any) {
       const status = error?.response?.status;
       if (status === 403 || status === 404) {
@@ -131,7 +200,7 @@ export function JobDetail() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }
 
   // Request worker's current location
   const requestLocation = () => {
@@ -180,13 +249,22 @@ export function JobDetail() {
   }, [workerLocation, request?.id]);
 
   const handleAccept = async () => {
+    const wasPendingClaim =
+      request?.status === "pending" && !request?.assignedWorkerId;
     setIsSubmitting(true);
     try {
       await api.patch(`/api/requests/${jobId}/accept`);
-      toast.success("Job accepted. You can now proceed to the location.");
+      toast.success(
+        wasPendingClaim
+          ? "Job claimed. Confirm by accepting it below."
+          : "Job accepted. You can now proceed to the location."
+      );
       await fetchRequest();
     } catch (error: any) {
-      toast.error(error.response?.data?.error || "Failed to accept job");
+      toast.error(
+        error.response?.data?.error ||
+          (wasPendingClaim ? "Failed to claim job" : "Failed to accept job")
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -250,15 +328,41 @@ export function JobDetail() {
       return;
     }
 
+    if (selectedWorkingDates.length === 0) {
+      toast.error("Select at least one working date.");
+      return;
+    }
+
+    const today = toLocalDateInputValue();
+    if (selectedWorkingDates.some((date) => date < today)) {
+      toast.error("Working dates cannot be in the past.");
+      return;
+    }
+
+    if (new Set(selectedWorkingDates).size !== selectedWorkingDates.length) {
+      toast.error("Select each working date only once.");
+      return;
+    }
+
+    if (workingStart >= workingEnd) {
+      toast.error("Working start time must be before end time.");
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const { data } = await api.patch(`/api/requests/${jobId}/final-price`, {
         finalPrice: numericFinalPrice,
         priceChangeReason: priceChangeReason.trim(),
         finalSchedule: {
-          numberOfDays: Number(numDays),
-          startTime: scheduleStart,
-          endTime: scheduleEnd,
+          workingSchedule: selectedWorkingDates
+            .slice()
+            .sort()
+            .map((date) => ({
+              date,
+              startTime: workingStart,
+              endTime: workingEnd,
+            })),
         },
       });
 
@@ -288,6 +392,23 @@ export function JobDetail() {
     }
     if (numericFinalPrice !== request!.suggestedPrice && !priceChangeReason.trim()) {
       toast.error("Please explain why the final price changed");
+      return;
+    }
+    if (selectedWorkingDates.length === 0) {
+      toast.error("Select at least one working date.");
+      return;
+    }
+    const today = toLocalDateInputValue();
+    if (selectedWorkingDates.some((date) => date < today)) {
+      toast.error("Working dates cannot be in the past.");
+      return;
+    }
+    if (new Set(selectedWorkingDates).size !== selectedWorkingDates.length) {
+      toast.error("Select each working date only once.");
+      return;
+    }
+    if (workingStart >= workingEnd) {
+      toast.error("Working start time must be before end time.");
       return;
     }
     setShowSummary(true);
@@ -340,6 +461,46 @@ export function JobDetail() {
     ? Math.round(numericFinalPrice * (previewCommissionPercent / 100))
     : 0;
   const previewTotal = numericFinalPrice ? numericFinalPrice + previewCommission : 0;
+  const requestedDate = toDateInputValue(request.schedule.date);
+  const shownWorkingSchedule =
+    request.schedule.workingSchedule && request.schedule.workingSchedule.length > 0
+      ? request.schedule.workingSchedule
+      : request.schedule.startTime
+        ? [
+            {
+              date: requestedDate,
+              startTime: request.schedule.startTime,
+              endTime: request.schedule.endTime,
+            },
+          ]
+        : [];
+  const previewWorkingSchedule = selectedWorkingDates
+    .slice()
+    .sort()
+    .map((date) => ({
+      date,
+      startTime: workingStart,
+      endTime: workingEnd,
+    }));
+
+  const visibleWorkingDateOptions = (() => {
+    const today = toLocalDateInputValue();
+    return Array.from({ length: visibleDateCount }, (_, i) =>
+      addDaysToInputDate(today, i)
+    );
+  })();
+
+  const toggleWorkingDate = (date: string) => {
+    setSelectedWorkingDates((current) =>
+      current.includes(date)
+        ? current.filter((d) => d !== date)
+        : [...current, date].sort()
+    );
+  };
+
+  const addMoreDays = () => {
+    setVisibleDateCount((c) => c + 3);
+  };
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
@@ -448,19 +609,27 @@ export function JobDetail() {
 
       <div className="card space-y-3">
         <h3 className="font-semibold flex items-center gap-2">
-          <Clock size={18} /> Schedule
+          <Clock size={18} /> Working Schedule
         </h3>
         <div className="space-y-2 text-sm">
-          <p>
-            <span className="text-slate-600">Date:</span>{" "}
-            <span className="font-medium">{formatDate(request.schedule.date)}</span>
-          </p>
-          <p>
-            <span className="text-slate-600">Time:</span>{" "}
-            <span className="font-medium">
-              {request.schedule.startTime ? `${request.schedule.startTime} - ${request.schedule.endTime}` : "No specified time"}
-            </span>
-          </p>
+          {shownWorkingSchedule.length > 0 ? (
+            shownWorkingSchedule.map((slot) => (
+              <div
+                key={`${slot.date}-${slot.startTime}-${slot.endTime}`}
+                className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2"
+              >
+                <span className="font-medium">{formatReadableDate(slot.date)}</span>
+                <span className="text-slate-600">
+                  {format12hRange(slot.startTime, slot.endTime)}
+                </span>
+              </div>
+            ))
+          ) : (
+            <p>
+              <span className="text-slate-600">Requested date:</span>{" "}
+              <span className="font-medium">{formatDate(request.schedule.date)}</span>
+            </p>
+          )}
         </div>
       </div>
 
@@ -618,35 +787,61 @@ export function JobDetail() {
               </div>
 
               <div className="border-t border-slate-100 pt-3 space-y-3">
-                <p className="text-sm font-medium text-slate-700">Final Schedule</p>
-                <div>
-                  <label className="label">Number of Working Days</label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={numDays}
-                    onChange={(e) => setNumDays(e.target.value)}
-                    className="input-field"
-                  />
+                <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                  <Calendar size={16} />
+                  Final Working Schedule
+                </div>
+                <div className="space-y-3 rounded-xl bg-slate-50 p-3">
+                  <p className="text-xs text-slate-500">
+                    Tick the days you'll work on this job.
+                  </p>
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                    {visibleWorkingDateOptions.map((date) => {
+                      const checked = selectedWorkingDates.includes(date);
+                      return (
+                        <label
+                          key={date}
+                          className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors ${
+                            checked
+                              ? "border-primary-500 bg-primary-50 text-primary-700"
+                              : "border-slate-200 bg-white text-slate-600 hover:border-primary-300"
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleWorkingDate(date)}
+                            className="h-4 w-4 accent-primary-600"
+                          />
+                          <span className="font-medium">
+                            {formatReadableDate(date)}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={addMoreDays}
+                    className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:border-primary-400 hover:text-primary-600"
+                  >
+                    <Plus size={16} />
+                    Add days
+                  </button>
+                  {selectedWorkingDates.length === 0 && (
+                    <p className="text-xs text-rose-500">
+                      Select at least one working date.
+                    </p>
+                  )}
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="label">Start Time</label>
-                    <input
-                      type="time"
-                      value={scheduleStart}
-                      onChange={(e) => setScheduleStart(e.target.value)}
-                      className="input-field"
-                    />
+                    <TimeInput value={workingStart} onChange={setWorkingStart} />
                   </div>
                   <div>
                     <label className="label">End Time</label>
-                    <input
-                      type="time"
-                      value={scheduleEnd}
-                      onChange={(e) => setScheduleEnd(e.target.value)}
-                      className="input-field"
-                    />
+                    <TimeInput value={workingEnd} onChange={setWorkingEnd} />
                   </div>
                 </div>
               </div>
@@ -665,6 +860,13 @@ export function JobDetail() {
                     setShowPriceForm(false);
                     setFinalPrice(request.finalPrice?.toString() || "");
                     setPriceChangeReason("");
+                    setSelectedWorkingDates(
+                      getInitialWorkingDates(
+                        requestedDate,
+                        request.schedule.workingSchedule?.map((slot) => slot.date)
+                      )
+                    );
+                    setVisibleDateCount(3);
                   }}
                   className="btn-secondary flex-1"
                 >
@@ -703,6 +905,22 @@ export function JobDetail() {
             >
               <XCircle size={18} />
               {isSubmitting ? "Rejecting..." : "Reject Job"}
+            </button>
+          </div>
+        )}
+
+        {request.status === "pending" && !request.assignedWorkerId && (
+          <div className="space-y-2">
+            <p className="text-xs text-slate-500">
+              No worker has accepted this yet. Claim it first to take the job.
+            </p>
+            <button
+              onClick={handleAccept}
+              disabled={isSubmitting}
+              className="btn-primary w-full flex items-center justify-center gap-2"
+            >
+              <CheckCircle size={18} />
+              {isSubmitting ? "Claiming..." : "Claim Job"}
             </button>
           </div>
         )}
@@ -817,19 +1035,18 @@ export function JobDetail() {
             </div>
 
             <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm space-y-1">
-              <p className="font-semibold text-slate-700 mb-2">Final Schedule</p>
-              <div className="flex justify-between">
-                <span className="text-slate-600">Date</span>
-                <span className="font-medium">{formatDate(request.schedule.date)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-600">Time</span>
-                <span className="font-medium">{scheduleStart} – {scheduleEnd}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-600">Duration</span>
-                <span className="font-medium">{numDays} day(s)</span>
-              </div>
+              <p className="font-semibold text-slate-700 mb-2">Working Schedule</p>
+              {previewWorkingSchedule.map((slot) => (
+                <div
+                  key={`${slot.date}-${slot.startTime}-${slot.endTime}-summary`}
+                  className="flex justify-between"
+                >
+                  <span className="text-slate-600">{formatReadableDate(slot.date)}</span>
+                  <span className="font-medium">
+                    {format12hRange(slot.startTime, slot.endTime)}
+                  </span>
+                </div>
+              ))}
             </div>
 
             <label className="flex items-start gap-3 cursor-pointer">

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-import { Shield, Ban, UserCheck, Trash2, Search } from "lucide-react";
+import { Shield, Ban, UserCheck, Trash2, Search, IdCard, Check, X, Eye } from "lucide-react";
 import api from "@/services/api";
 import { BackButton } from "@/components/common/BackButton";
 import {
@@ -38,10 +38,26 @@ interface PasswordResetRequestItem {
   requestedAt: string | Date | null;
 }
 
+interface NameChangeRequestItem {
+  id: string;
+  userId: string;
+  role: string;
+  currentFirstName: string;
+  currentLastName: string;
+  requestedFirstName: string;
+  requestedLastName: string;
+  contactNumber: string;
+  email?: string;
+  idPhotoUrl: string;
+  status: "pending" | "approved" | "rejected";
+  requestedAt: string | Date | null;
+}
+
 export function UserManagement() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [users, setUsers] = useState<UserItem[]>([]);
   const [resetRequests, setResetRequests] = useState<PasswordResetRequestItem[]>([]);
+  const [nameChangeRequests, setNameChangeRequests] = useState<NameChangeRequestItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [roleFilter, setRoleFilter] = useState<string>(() => {
     const role = searchParams.get("role");
@@ -57,9 +73,14 @@ export function UserManagement() {
   const [deleteTarget, setDeleteTarget] = useState<UserItem | null>(null);
   const [deleteSubmitting, setDeleteSubmitting] = useState(false);
   const [resetActionId, setResetActionId] = useState<string | null>(null);
+  const [nameActionId, setNameActionId] = useState<string | null>(null);
+  const [previewNameRequest, setPreviewNameRequest] = useState<NameChangeRequestItem | null>(null);
   const [issuedPasswords, setIssuedPasswords] = useState<Record<string, string>>({});
   const visibleResetRequests = resetRequests.filter(
     (request) => request.status === "pending" || Boolean(issuedPasswords[request.id])
+  );
+  const visibleNameChangeRequests = nameChangeRequests.filter(
+    (request) => request.status === "pending"
   );
   const normalizedSearchQuery = searchQuery.trim().toLowerCase();
   const filteredUsers = users.filter((user) => {
@@ -103,16 +124,19 @@ export function UserManagement() {
   async function fetchUsers() {
     try {
       const params = roleFilter !== "all" ? `?role=${roleFilter}` : "";
-      const [{ data: usersData }, { data: resetData }] = await Promise.all([
+      const [{ data: usersData }, { data: resetData }, { data: nameData }] = await Promise.all([
         api.get(`/api/admin/users${params}`),
         api.get("/api/admin/password-reset-requests?status=all"),
+        api.get("/api/admin/name-change-requests?status=all"),
       ]);
       setUsers(usersData.users || []);
       setResetRequests(resetData.requests || []);
+      setNameChangeRequests(nameData.requests || []);
     } catch (error) {
       console.error("Failed to load users:", error);
       setUsers([]);
       setResetRequests([]);
+      setNameChangeRequests([]);
       toast.error("Failed to load users");
     } finally {
       setLoading(false);
@@ -227,6 +251,31 @@ export function UserManagement() {
     }
   }
 
+  async function handleNameAction(
+    requestId: string,
+    action: "approve" | "reject"
+  ) {
+    const resolutionNote =
+      action === "reject" ? prompt("Reason for rejecting this name change?") ?? "" : "";
+
+    setNameActionId(requestId);
+    try {
+      await api.patch(`/api/admin/name-change-requests/${requestId}`, {
+        action,
+        resolutionNote,
+      });
+      toast.success(`Name change request ${action === "approve" ? "approved" : "rejected"}`);
+      setPreviewNameRequest(null);
+      await fetchUsers();
+    } catch (error: any) {
+      toast.error(
+        error?.response?.data?.error || "Failed to process name change request"
+      );
+    } finally {
+      setNameActionId(null);
+    }
+  }
+
   function formatDate(value: string | Date | null | undefined) {
     if (!value) return "Unknown time";
     const date = value instanceof Date ? value : new Date(value);
@@ -258,6 +307,82 @@ export function UserManagement() {
     <div>
       <BackButton to="/admin/dashboard" label="Back to Dashboard" />
       <h2 className="text-2xl font-bold mb-6">User Management</h2>
+
+      <div className="card mb-6">
+        <div className="flex items-center justify-between gap-3 mb-4">
+          <div>
+            <h3 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
+              <IdCard size={18} /> Name Change Requests
+            </h3>
+            <p className="text-sm text-slate-500">
+              Review requested name changes with their holding-ID photo.
+            </p>
+          </div>
+          <span className="rounded-full bg-primary-50 px-3 py-1 text-sm font-medium text-primary-700">
+            {visibleNameChangeRequests.length} pending
+          </span>
+        </div>
+
+        {visibleNameChangeRequests.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-slate-200 px-4 py-8 text-center text-sm text-slate-500">
+            No pending name change requests.
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {visibleNameChangeRequests.map((request) => (
+              <div
+                key={request.id}
+                className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-4"
+              >
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="font-semibold text-slate-900">
+                        {request.currentFirstName} {request.currentLastName}
+                      </p>
+                      <span className="text-slate-400">to</span>
+                      <p className="font-semibold text-primary-700">
+                        {request.requestedFirstName} {request.requestedLastName}
+                      </p>
+                      <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-slate-600">
+                        {request.role}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-sm text-slate-600">
+                      {request.contactNumber} {request.email ? `- ${request.email}` : ""}
+                    </p>
+                    <p className="text-xs text-slate-400">
+                      Requested {formatDate(request.requestedAt)}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={() => setPreviewNameRequest(request)}
+                      className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 flex items-center gap-1"
+                    >
+                      <Eye size={14} /> View ID
+                    </button>
+                    <button
+                      onClick={() => handleNameAction(request.id, "approve")}
+                      disabled={nameActionId === request.id}
+                      className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60 flex items-center gap-1"
+                    >
+                      <Check size={14} /> Approve
+                    </button>
+                    <button
+                      onClick={() => handleNameAction(request.id, "reject")}
+                      disabled={nameActionId === request.id}
+                      className="rounded-lg border border-red-200 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-60 flex items-center gap-1"
+                    >
+                      <X size={14} /> Reject
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       <div className="card mb-6">
         <div className="flex items-center justify-between gap-3 mb-4">
@@ -544,6 +669,53 @@ export function UserManagement() {
           }}
           isSubmitting={dialogSubmitting}
         />
+      )}
+
+      {previewNameRequest && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl flex flex-col max-h-[90vh]">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+              <div>
+                <h3 className="font-bold text-lg text-slate-900">
+                  Name Change Verification
+                </h3>
+                <p className="text-sm text-slate-500">
+                  {previewNameRequest.currentFirstName} {previewNameRequest.currentLastName} to{" "}
+                  {previewNameRequest.requestedFirstName} {previewNameRequest.requestedLastName}
+                </p>
+              </div>
+              <button
+                onClick={() => setPreviewNameRequest(null)}
+                className="text-slate-400 hover:text-slate-600"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="overflow-auto bg-slate-50 p-4 flex-1">
+              <img
+                src={previewNameRequest.idPhotoUrl}
+                alt="User holding ID"
+                className="mx-auto max-h-[65vh] rounded-lg border border-slate-200 bg-white object-contain"
+              />
+            </div>
+            <div className="flex gap-3 px-6 py-4 border-t border-slate-200">
+              <button
+                onClick={() => handleNameAction(previewNameRequest.id, "approve")}
+                disabled={nameActionId === previewNameRequest.id}
+                className="flex-1 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+              >
+                Approve Name Change
+              </button>
+              <button
+                onClick={() => handleNameAction(previewNameRequest.id, "reject")}
+                disabled={nameActionId === previewNameRequest.id}
+                className="flex-1 rounded-lg border border-red-200 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-60"
+              >
+                Reject
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

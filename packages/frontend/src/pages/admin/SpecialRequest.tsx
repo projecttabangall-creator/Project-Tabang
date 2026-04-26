@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
+import { TimeInput } from "@/components/common/TimeInput";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { BackButton } from "@/components/common/BackButton";
@@ -83,6 +84,7 @@ export function SpecialRequest() {
     handleSubmit,
     watch,
     setValue,
+    control,
     formState: { errors },
   } = useForm<SpecialRequestFormData>({
     defaultValues: {
@@ -484,7 +486,13 @@ export function SpecialRequest() {
             <input
               type="date"
               className="input-field"
-              {...register("date", { required: "Date is required" })}
+              min={new Date().toISOString().split("T")[0]}
+              {...register("date", {
+                required: "Date is required",
+                validate: (val) =>
+                  val >= new Date().toISOString().split("T")[0] ||
+                  "Date cannot be in the past",
+              })}
             />
             {errors.date && (
               <p className="text-rose-500 text-xs mt-1">
@@ -518,10 +526,13 @@ export function SpecialRequest() {
                 <label className="label flex items-center gap-1">
                   <Clock size={14} /> Start Time
                 </label>
-                <input
-                  type="time"
-                  className="input-field"
-                  {...register("startTime", { required: "Start time is required" })}
+                <Controller
+                  name="startTime"
+                  control={control}
+                  rules={{ required: "Start time is required" }}
+                  render={({ field }) => (
+                    <TimeInput value={field.value || "08:00"} onChange={field.onChange} />
+                  )}
                 />
                 {errors.startTime && (
                   <p className="text-rose-500 text-xs mt-1">
@@ -533,10 +544,13 @@ export function SpecialRequest() {
                 <label className="label flex items-center gap-1">
                   <Clock size={14} /> End Time
                 </label>
-                <input
-                  type="time"
-                  className="input-field"
-                  {...register("endTime", { required: "End time is required" })}
+                <Controller
+                  name="endTime"
+                  control={control}
+                  rules={{ required: "End time is required" }}
+                  render={({ field }) => (
+                    <TimeInput value={field.value || "17:00"} onChange={field.onChange} />
+                  )}
                 />
                 {errors.endTime && (
                   <p className="text-rose-500 text-xs mt-1">

@@ -8,6 +8,8 @@ import {
   calculateTotalForResident,
   getCommissionPercent,
 } from "../services/pricing.service";
+import { recomputeWorkerPerformance } from "../services/workerPerformance.service";
+import { createSurveysForPayment } from "./feedbackSurvey.controller";
 
 interface SubmitPaymentBody {
   requestId: string;
@@ -201,37 +203,10 @@ export async function submitPayment(
 
     await requestsRef.doc(body.requestId).update(requestUpdate);
 
-    // Recalculate worker's average rating if a new rating was added
-    if (body.rating && !requestData.rating) {
-      const workerId = requestData.assignedWorkerId;
-      if (workerId) {
-        try {
-          const ratedRequests = await requestsRef
-            .where("assignedWorkerId", "==", workerId)
-            .where("rating", ">", 0)
-            .get();
-
-          if (!ratedRequests.empty) {
-            const ratings = ratedRequests.docs.map((doc) => {
-              const data = doc.data();
-              return typeof data.rating === "number" ? data.rating : 0;
-            });
-            const sum = ratings.reduce((a, b) => a + b, 0);
-            const average =
-              Math.round((sum / ratings.length) * 10) / 10;
-
-            await db.collection("users").doc(workerId).update({
-              "workerData.averageRating": average,
-            });
-          }
-        } catch (ratingError) {
-          console.warn("Warning: Failed to update worker average rating:", ratingError);
-          // Don't fail the payment submission if rating update fails
-        }
-      }
-    }
-
-    const admins = await db.collection("users").where("role", "==", "admin").get();
+    const admins = await db
+      .collection("users")
+      .where("role", "in", ["admin", "superadmin"])
+      .get();
     for (const adminDoc of admins.docs) {
       await db.collection("notifications").add({
         userId: adminDoc.id,
@@ -359,7 +334,7 @@ export async function getPayment(
 
     const payment = doc.data()!;
 
-    if (role !== "admin" && payment.residentId !== uid && payment.workerId !== uid) {
+    if (role !== "admin" && role !== "superadmin" && payment.residentId !== uid && payment.workerId !== uid) {
       res.status(403).json({ error: "Access denied" });
       return;
     }
@@ -409,6 +384,10 @@ export async function confirmPayment(
       updatedAt: now,
     });
 
+    if (payment.workerId) {
+      await recomputeWorkerPerformance(payment.workerId);
+    }
+
     await db.collection("notifications").add({
       userId: payment.residentId,
       type: "payment_confirmed",
@@ -438,6 +417,26 @@ export async function confirmPayment(
       details: `Payment confirmed: PHP ${payment.totalAmount}`,
       createdAt: now,
     });
+
+    // Send the post-payment feedback survey to the resident & worker
+    try {
+      const requestSnap = await requestsRef.doc(payment.requestId).get();
+      const requestData = requestSnap.exists ? requestSnap.data()! : {};
+      await createSurveysForPayment({
+        requestId: payment.requestId,
+        paymentId,
+        residentId: payment.residentId,
+        workerId: payment.workerId,
+        categoryName:
+          typeof requestData?.categoryName === "string"
+            ? requestData.categoryName
+            : "",
+        finalPrice:
+          typeof payment.workerAmount === "number" ? payment.workerAmount : undefined,
+      });
+    } catch (surveyError) {
+      console.error("Failed to create feedback surveys:", surveyError);
+    }
 
     res.json({ message: "Payment confirmed" });
   } catch (error) {
@@ -485,6 +484,10 @@ export async function rejectPayment(
       status: REQUEST_STATUSES.COMPLETED,
       updatedAt: now,
     });
+
+    if (payment.workerId) {
+      await recomputeWorkerPerformance(payment.workerId);
+    }
 
     await db.collection("notifications").add({
       userId: payment.residentId,

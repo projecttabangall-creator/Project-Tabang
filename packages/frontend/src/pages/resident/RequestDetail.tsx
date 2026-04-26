@@ -2,18 +2,25 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { BackButton } from "@/components/common/BackButton";
+import { format12hRange } from "@/utils/time";
+import {
+  CancelOrRepostModal,
+  CancelOrRepostPayload,
+} from "@/components/common/CancelOrRepostModal";
 import {
   AlertTriangle,
   Clock,
   CreditCard,
   MapPin,
   MessageCircle,
+  RefreshCw,
   Star,
   Trash2,
   User,
 } from "lucide-react";
 import { MapContainer, Marker, TileLayer } from "react-leaflet";
 import api from "@/services/api";
+import { useRequestDocumentLiveRefresh } from "@/hooks/useRequestLiveRefresh";
 
 interface Request {
   id: string;
@@ -30,11 +37,15 @@ interface Request {
   schedule: { date: any; startTime: string; endTime: string; numberOfDays?: number };
   status: string;
   workerName?: string;
+  assignedWorkerId?: string;
   workerPhone?: string;
+  workerProfilePhotoUrl?: string;
   workerRating?: number;
   yourRating?: number;
   photoUrls?: string[];
   priceOverrideRequired?: boolean;
+  acceptanceExpiredAt?: any;
+  acceptanceExpiredWorkerName?: string;
 }
 
 const getLat = (location: any) =>
@@ -62,12 +73,15 @@ export function RequestDetail() {
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState("");
   const [showRatingForm, setShowRatingForm] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
 
   useEffect(() => {
     fetchRequest();
   }, [requestId]);
 
-  const fetchRequest = async () => {
+  useRequestDocumentLiveRefresh(requestId, fetchRequest, Boolean(requestId));
+
+  async function fetchRequest() {
     try {
       const { data } = await api.get(`/api/requests/${requestId}`);
       setRequest(data.request || null);
@@ -82,22 +96,66 @@ export function RequestDetail() {
     } finally {
       setIsLoading(false);
     }
+  }
+
+  const handleCancel = () => {
+    setShowCancelModal(true);
   };
 
-  const handleCancel = async () => {
-    if (!confirm("Are you sure you want to cancel this request?")) {
+  const handleCancelOrRepost = async (payload: CancelOrRepostPayload) => {
+    setIsSubmitting(true);
+    try {
+      if (payload.mode === "repost") {
+        await api.patch(`/api/requests/${requestId}/repost`, {
+          reasonCategories: payload.reasonCategories,
+          reasonOther: payload.reasonOther,
+          schedule: payload.schedule,
+        });
+        toast.success(
+          "Request reposted. The previous worker won't be reassigned."
+        );
+        setShowCancelModal(false);
+        await fetchRequest();
+      } else {
+        await api.patch(`/api/requests/${requestId}/cancel`, {
+          reasonCategories: payload.reasonCategories,
+          reasonOther: payload.reasonOther,
+          reason: payload.reasonCategories.join(", "),
+        });
+        toast.success("Request cancelled");
+        setShowCancelModal(false);
+        navigate("/resident/requests");
+      }
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || "Failed to update request");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleAcceptanceTimeoutAction = async (action: "cancel" | "repost") => {
+    const message =
+      action === "repost"
+        ? "Repost this request? The previous worker will not be assigned again."
+        : "Cancel this request permanently?";
+
+    if (!confirm(message)) {
       return;
     }
 
     setIsSubmitting(true);
     try {
-      await api.patch(`/api/requests/${requestId}/cancel`, {
-        reason: "Cancelled by resident",
-      });
-      toast.success("Request cancelled");
-      navigate("/resident/requests");
+      const { data } = await api.patch(
+        `/api/requests/${requestId}/acceptance-timeout`,
+        { action }
+      );
+      toast.success(data.message || (action === "repost" ? "Request reposted" : "Request cancelled"));
+      await fetchRequest();
+      if (action === "cancel") {
+        navigate("/resident/requests");
+      }
     } catch (error: any) {
-      toast.error(error.response?.data?.error || "Failed to cancel request");
+      toast.error(error.response?.data?.error || "Failed to update request");
     } finally {
       setIsSubmitting(false);
     }
@@ -143,6 +201,7 @@ export function RequestDetail() {
     pending: "bg-slate-100 text-slate-700",
     assigned: "bg-yellow-50 text-yellow-700",
     accepted: "bg-primary-50 text-primary-700",
+    acceptance_expired: "bg-red-50 text-red-700",
     worker_arrived: "bg-purple-50 text-purple-700",
     price_confirmed: "bg-indigo-50 text-indigo-700",
     in_progress: "bg-accent-50 text-accent-700",
@@ -162,6 +221,7 @@ export function RequestDetail() {
     "in_progress",
   ].includes(request.status);
   const canRate = request.status === "payment_confirmed";
+  const needsAcceptanceTimeoutAction = request.status === "acceptance_expired";
   const workerPrice = request.finalPrice || request.suggestedPrice;
   const commissionPercent = request.commissionPercent || 10;
 
@@ -216,26 +276,80 @@ export function RequestDetail() {
           <h3 className="font-semibold flex items-center gap-2">
             <User size={18} /> Assigned Worker
           </h3>
-          <div className="space-y-2 text-sm">
-            <p>
-              <span className="text-slate-600">Name:</span>{" "}
-              <span className="font-medium">{request.workerName}</span>
-            </p>
-            {request.workerPhone && (
-              <p>
-                <span className="text-slate-600">Phone:</span>{" "}
-                <span className="font-medium">{request.workerPhone}</span>
-              </p>
-            )}
-            {typeof request.workerRating === "number" && (
-              <div className="flex items-center gap-1">
-                <span className="text-slate-600">Rating:</span>
-                <span className="font-medium flex items-center gap-1">
-                  <Star size={14} fill="currentColor" className="text-yellow-400" />
-                  {request.workerRating.toFixed(1)}
-                </span>
+          <div className="flex items-center gap-4 rounded-xl bg-slate-50 p-4">
+            {request.workerProfilePhotoUrl ? (
+              <img
+                src={request.workerProfilePhotoUrl}
+                alt={request.workerName}
+                className="h-16 w-16 rounded-full border border-slate-200 object-cover"
+              />
+            ) : (
+              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary-100 text-lg font-bold text-primary-700">
+                {request.workerName
+                  .split(" ")
+                  .map((part) => part[0])
+                  .join("")
+                  .slice(0, 2)
+                  .toUpperCase()}
               </div>
             )}
+            <div className="min-w-0 flex-1 text-sm">
+              <p className="truncate text-base font-semibold text-slate-900">
+                {request.workerName}
+              </p>
+              {typeof request.workerRating === "number" && (
+                <div className="mt-1 flex items-center gap-1 text-yellow-600">
+                  <Star size={14} fill="currentColor" />
+                  <span className="font-medium">
+                    {request.workerRating.toFixed(1)}
+                  </span>
+                  <span className="text-slate-500">rating</span>
+                </div>
+              )}
+              {request.workerPhone && (
+                <p className="mt-1 text-slate-600">
+                  Contact: <span className="font-medium">{request.workerPhone}</span>
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {needsAcceptanceTimeoutAction && (
+        <div className="card border-red-200 bg-red-50 space-y-4">
+          <div className="flex gap-3">
+            <AlertTriangle size={22} className="mt-0.5 shrink-0 text-red-600" />
+            <div>
+              <h3 className="font-semibold text-red-800">
+                Worker acceptance expired
+              </h3>
+              <p className="mt-1 text-sm text-red-700">
+                {request.acceptanceExpiredWorkerName || request.workerName || "The worker"} accepted this job more than 24 hours ago but did not arrive. You can cancel the request or repost it for another worker.
+              </p>
+              <p className="mt-2 text-xs text-red-600">
+                Reposting will exclude the previous worker from this request.
+              </p>
+            </div>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <button
+              type="button"
+              onClick={() => handleAcceptanceTimeoutAction("repost")}
+              disabled={isSubmitting}
+              className="btn-primary flex items-center justify-center gap-2"
+            >
+              <RefreshCw size={18} />
+              {isSubmitting ? "Processing..." : "Repost Request"}
+            </button>
+            <button
+              type="button"
+              onClick={() => handleAcceptanceTimeoutAction("cancel")}
+              disabled={isSubmitting}
+              className="rounded-lg border border-red-300 bg-white py-3 font-medium text-red-700 transition-colors hover:bg-red-100 disabled:opacity-50"
+            >
+              Cancel Request
+            </button>
           </div>
         </div>
       )}
@@ -298,7 +412,7 @@ export function RequestDetail() {
           <p>
             <span className="text-slate-600">Time:</span>{" "}
             <span className="font-medium">
-              {request.schedule.startTime ? `${request.schedule.startTime} - ${request.schedule.endTime}` : "No specified time"}
+              {request.schedule.startTime ? format12hRange(request.schedule.startTime, request.schedule.endTime) : "No specified time"}
             </span>
           </p>
           {request.schedule.numberOfDays && (
@@ -447,16 +561,45 @@ export function RequestDetail() {
         </Link>
       )}
 
-      {canCancel && (
-        <button
-          onClick={handleCancel}
-          disabled={isSubmitting}
-          className="w-full py-3 bg-red-50 hover:bg-red-100 text-red-700 font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
-        >
-          <Trash2 size={18} />
-          {isSubmitting ? "Cancelling..." : "Cancel Request"}
-        </button>
+      {canCancel && !needsAcceptanceTimeoutAction && (
+        <div className="space-y-2">
+          {request.assignedWorkerId && (
+            <p className="text-xs text-slate-500 text-center">
+              Changing the worker will repost the request and exclude{" "}
+              {request.workerName || "the current worker"}.
+            </p>
+          )}
+          <button
+            onClick={handleCancel}
+            disabled={isSubmitting}
+            className="w-full py-3 bg-red-50 hover:bg-red-100 text-red-700 font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
+          >
+            <Trash2 size={18} />
+            {isSubmitting
+              ? "Working..."
+              : request.assignedWorkerId
+                ? "Cancel or change worker"
+                : "Cancel Request"}
+          </button>
+        </div>
       )}
+
+      <CancelOrRepostModal
+        open={showCancelModal}
+        hasAssignedWorker={!!request.assignedWorkerId}
+        defaultDate={
+          typeof request.schedule?.date === "string"
+            ? request.schedule.date
+            : new Date(request.schedule?.date?._seconds * 1000)
+                .toISOString()
+                .split("T")[0]
+        }
+        defaultStart={request.schedule?.startTime}
+        defaultEnd={request.schedule?.endTime}
+        onClose={() => setShowCancelModal(false)}
+        onSubmit={handleCancelOrRepost}
+        submitting={isSubmitting}
+      />
     </div>
   );
 }

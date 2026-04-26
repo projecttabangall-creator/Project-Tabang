@@ -9,9 +9,11 @@ import {
   getPhilippinePhoneCandidates,
   LoginInput,
   normalizePhilippinePhoneNumber,
+  ResolveLoginIdentifierInput,
   RequestPasswordResetInput,
   RegisterResidentInput,
   ROLES,
+  UpdateBiometricEnrollmentInput,
 } from "@tabang/shared";
 import { FieldValue } from "firebase-admin/firestore";
 
@@ -51,11 +53,23 @@ async function getAuthUserByAnyEmail(contactNumber: string) {
   return null;
 }
 
+async function getAuthUserByEmail(email: string) {
+  try {
+    return await auth.getUserByEmail(email);
+  } catch (error: any) {
+    if (error.code === "auth/user-not-found") {
+      return null;
+    }
+    throw error;
+  }
+}
+
 export async function registerResident(
   req: Request,
   res: Response
 ): Promise<void> {
-  const body = req.body as RegisterResidentInput;
+  const body = req.body as RegisterResidentInput & { email: string };
+  const normalizedEmail = body.email.trim().toLowerCase();
   const normalizedContactNumber = normalizePhilippinePhoneNumber(
     body.contactNumber,
     "local"
@@ -86,15 +100,27 @@ export async function registerResident(
       }
     }
 
-    const email = buildPreferredAuthEmail(normalizedContactNumber);
-    const userRecord = existingAuthUser
-      ? await auth.updateUser(existingAuthUser.uid, {
-          email,
+    const existingEmailUser = await getAuthUserByEmail(normalizedEmail);
+    if (existingEmailUser) {
+      const linkedFirestoreUser = await db
+        .collection("users")
+        .doc(existingEmailUser.uid)
+        .get();
+
+      if (linkedFirestoreUser.exists) {
+        res.status(409).json({ error: "Email already registered" });
+        return;
+      }
+    }
+
+    const userRecord = existingEmailUser
+      ? await auth.updateUser(existingEmailUser.uid, {
+          email: normalizedEmail,
           password: body.password,
           displayName: `${body.firstName} ${body.lastName}`,
         })
       : await auth.createUser({
-          email,
+          email: normalizedEmail,
           password: body.password,
           displayName: `${body.firstName} ${body.lastName}`,
         });
@@ -109,9 +135,10 @@ export async function registerResident(
       lastName: body.lastName,
       middleInitial: body.middleInitial || "",
       contactNumber: normalizedContactNumber,
+      email: normalizedEmail,
       address: body.address,
       creditPoints: DEFAULT_CREDIT_POINTS,
-      isVerified: true,
+      isVerified: false,
       isActive: true,
       accountStatus: "active",
       otpVerified: true,
@@ -121,13 +148,13 @@ export async function registerResident(
     });
 
     res.status(201).json({
-      message: "Registration successful. You can now sign in.",
+      message: "Registration successful. Verify your email before signing in.",
       uid: userRecord.uid,
     });
   } catch (error: any) {
     console.error("Registration error:", error);
     if (error.code === "auth/email-already-exists") {
-      res.status(409).json({ error: "Contact number already registered" });
+      res.status(409).json({ error: "Email already registered" });
       return;
     }
     res.status(500).json({
@@ -237,6 +264,42 @@ export async function login(req: Request, res: Response): Promise<void> {
   } catch (error) {
     console.error("Login error:", error);
     res.status(500).json({ error: "Login failed" });
+  }
+}
+
+export async function resolveLoginIdentifier(
+  req: Request,
+  res: Response
+): Promise<void> {
+  const body = req.body as ResolveLoginIdentifierInput;
+  const normalizedContactNumber = normalizePhilippinePhoneNumber(
+    body.contactNumber,
+    "local"
+  );
+
+  if (!normalizedContactNumber) {
+    res.status(400).json({ error: "Contact number is required" });
+    return;
+  }
+
+  try {
+    const userDoc = await findUserByContactNumber(normalizedContactNumber);
+
+    if (!userDoc) {
+      res.status(404).json({ error: "No account found for that contact number" });
+      return;
+    }
+
+    const userData = userDoc.data();
+    const resolvedEmail =
+      typeof userData?.email === "string" && userData.email.trim()
+        ? userData.email.trim().toLowerCase()
+        : buildPreferredAuthEmail(normalizedContactNumber);
+
+    res.json({ email: resolvedEmail });
+  } catch (error) {
+    console.error("Resolve login identifier error:", error);
+    res.status(500).json({ error: "Failed to resolve login identifier" });
   }
 }
 
@@ -392,6 +455,127 @@ export async function updateProfile(
   } catch (error) {
     console.error("Update profile error:", error);
     res.status(500).json({ error: "Failed to update profile" });
+  }
+}
+
+export async function requestNameChange(
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> {
+  const firstName =
+    typeof req.body?.firstName === "string" ? req.body.firstName.trim() : "";
+  const lastName =
+    typeof req.body?.lastName === "string" ? req.body.lastName.trim() : "";
+  const idPhotoUrl =
+    typeof req.body?.idPhotoUrl === "string" ? req.body.idPhotoUrl.trim() : "";
+
+  if (!["resident", "worker"].includes(req.user!.role)) {
+    res.status(403).json({ error: "Only residents and workers can request a name change" });
+    return;
+  }
+
+  if (!firstName || !lastName) {
+    res.status(400).json({ error: "First name and last name are required" });
+    return;
+  }
+
+  if (!idPhotoUrl.startsWith("data:image/") && !idPhotoUrl.startsWith("https://")) {
+    res.status(400).json({ error: "Photo of you holding an ID is required" });
+    return;
+  }
+
+  try {
+    const userRef = db.collection("users").doc(req.user!.uid);
+    const userDoc = await userRef.get();
+
+    if (!userDoc.exists) {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+
+    const userData = userDoc.data()!;
+    const existing = await db
+      .collection("nameChangeRequests")
+      .where("userId", "==", req.user!.uid)
+      .where("status", "==", "pending")
+      .limit(1)
+      .get();
+
+    if (!existing.empty) {
+      res.status(400).json({ error: "You already have a pending name change request" });
+      return;
+    }
+
+    const requestRef = await db.collection("nameChangeRequests").add({
+      userId: req.user!.uid,
+      role: req.user!.role,
+      currentFirstName: userData.firstName || "",
+      currentLastName: userData.lastName || "",
+      requestedFirstName: firstName,
+      requestedLastName: lastName,
+      contactNumber: userData.contactNumber || "",
+      email: userData.email || "",
+      idPhotoUrl,
+      status: "pending",
+      requestedAt: FieldValue.serverTimestamp(),
+    });
+
+    await userRef.update({
+      pendingNameChangeRequestId: requestRef.id,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    res.status(201).json({ message: "Name change request submitted" });
+  } catch (error) {
+    console.error("Request name change error:", error);
+    res.status(500).json({ error: "Failed to submit name change request" });
+  }
+}
+
+export async function syncEmailVerification(
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> {
+  try {
+    const authUser = await auth.getUser(req.user!.uid);
+    if (!authUser.emailVerified) {
+      res.status(400).json({ error: "Email is not verified yet" });
+      return;
+    }
+
+    await db.collection("users").doc(req.user!.uid).update({
+      isVerified: true,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Sync email verification error:", error);
+    res.status(500).json({ error: "Failed to sync email verification" });
+  }
+}
+
+export async function updateBiometricEnrollment(
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> {
+  const body = req.body as UpdateBiometricEnrollmentInput;
+
+  if (req.user?.role !== ROLES.ADMIN && req.user?.role !== ROLES.SUPERADMIN) {
+    res.status(403).json({ error: "Only admins can update their biometric status" });
+    return;
+  }
+
+  try {
+    await db.collection("users").doc(req.user!.uid).update({
+      biometricEnrolled: body.biometricEnrolled,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Update biometric enrollment error:", error);
+    res.status(500).json({ error: "Failed to update biometric enrollment" });
   }
 }
 

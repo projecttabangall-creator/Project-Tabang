@@ -4,20 +4,38 @@ import {
   ASSIGNMENT_WEIGHTS,
   DEFAULT_NEW_WORKER_RATING_SCORE,
   MIN_CREDIT_FOR_ASSIGNMENT,
+  ROOKIE_JOB_THRESHOLD,
 } from "@tabang/shared";
+
+function specsArray(value: unknown): string[] {
+  if (!value) return [];
+  return Array.isArray(value)
+    ? value.filter((v): v is string => typeof v === "string")
+    : typeof value === "string"
+      ? [value]
+      : [];
+}
 
 interface WorkerDoc {
   uid: string;
   workerData: {
-    specialization: string;
+    specialization: string | string[];
     completedJobsCount: number;
     averageRating: number;
     lastAssignedAt: any;
     location: { latitude: number; longitude: number };
     availability: Array<{
+      type?: "recurring" | "specific";
       dayOfWeek: number;
+      date?: string;
       startTime: string;
       endTime: string;
+    }>;
+    workingSchedule?: Array<{
+      date: string;
+      startTime: string;
+      endTime: string;
+      status?: string;
     }>;
     isAvailable: boolean;
   };
@@ -112,11 +130,42 @@ function checkAvailability(
   });
 }
 
+function hasWorkingScheduleConflict(
+  workingSchedule: WorkerDoc["workerData"]["workingSchedule"],
+  schedule: RequestSchedule
+): boolean {
+  if (!workingSchedule || workingSchedule.length === 0) return false;
+
+  const inactiveStatuses = new Set([
+    "completed",
+    "payment_confirmed",
+    "cancelled",
+    "resolved",
+  ]);
+
+  return workingSchedule.some((slot) => {
+    if (!slot || slot.date !== schedule.date) return false;
+    if (slot.status && inactiveStatuses.has(slot.status)) return false;
+
+    if (schedule.noSpecifiedTime) return true;
+
+    const reqStart = timeToMinutes(schedule.startTime);
+    const reqEnd = timeToMinutes(schedule.endTime);
+    const slotStart = timeToMinutes(slot.startTime);
+    const slotEnd = timeToMinutes(slot.endTime);
+
+    return reqStart < slotEnd && reqEnd > slotStart;
+  });
+}
+
 /**
- * Auto-assign a service request to the best worker
+ * Auto-assign a service request to the best worker.
  *
  * Algorithm:
- * 1. Hard filters: category, availability, credit >= 3, verified, active
+ * 1. Hard filters: category, availability, credit >= 3, verified, active,
+ *    completedJobsCount >= ROOKIE_JOB_THRESHOLD (5).
+ *    Rookies (< 5 completed jobs) are excluded from scoring — they see the
+ *    request in the open pending pool and can claim it first-come-first-served.
  * 2. Scoring: Frequency (50%) + Rating (35%) + Location (15%)
  * 3. Tiebreaker: oldest lastAssignedAt
  */
@@ -127,34 +176,51 @@ export async function assignWorker(
   excludedWorkerIds: string[] = []
 ): Promise<AssignmentResult> {
   try {
-    // Fetch all workers in this category
+    // Fetch all workers; specialization may be stored as a string OR string[],
+    // so we filter in memory rather than via a Firestore equality predicate.
     const workersSnapshot = await db
       .collection("users")
       .where("role", "==", "worker")
-      .where("workerData.specialization", "==", categoryId)
       .get();
 
-    const allWorkers = workersSnapshot.docs.map((doc) => ({
-      uid: doc.id,
-      ...doc.data(),
-    })) as WorkerDoc[];
+    const allWorkers = workersSnapshot.docs
+      .map((doc) => ({ uid: doc.id, ...doc.data() }) as WorkerDoc)
+      .filter((w) => specsArray(w.workerData?.specialization).includes(categoryId));
 
     // STAGE 1: Hard Filters
+    // Only experienced workers (>= ROOKIE_JOB_THRESHOLD completed jobs) participate
+    // in auto-assignment scoring. Rookies see the request in the open pending pool.
     const eligible = allWorkers.filter((w) => {
       const notExcluded = !excludedWorkerIds.includes(w.uid);
-      const categoryMatch = w.workerData.specialization === categoryId;
+      const categoryMatch = specsArray(w.workerData?.specialization).includes(
+        categoryId
+      );
       const available = checkAvailability(w.workerData.availability, schedule);
+      const notBooked = !hasWorkingScheduleConflict(
+        w.workerData.workingSchedule,
+        schedule
+      );
       const creditOk = w.creditPoints >= MIN_CREDIT_FOR_ASSIGNMENT;
+      const experienced =
+        (w.workerData.completedJobsCount ?? 0) >= ROOKIE_JOB_THRESHOLD;
       const statusOk =
         w.accountStatus === "active" &&
         w.isVerified &&
         w.isActive &&
         w.workerData.isAvailable;
 
-      return notExcluded && categoryMatch && available && creditOk && statusOk;
+      return (
+        notExcluded &&
+        categoryMatch &&
+        available &&
+        notBooked &&
+        creditOk &&
+        experienced &&
+        statusOk
+      );
     });
 
-    // Edge case: no eligible workers
+    // Edge case: no eligible experienced workers — leave in PENDING for rookies
     if (eligible.length === 0) {
       return { workerId: null, status: "pending_queue" };
     }

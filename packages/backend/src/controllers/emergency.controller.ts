@@ -49,7 +49,7 @@ function stripRewardForNonAdmin(
   role: string,
   data: FirebaseFirestore.DocumentData
 ): FirebaseFirestore.DocumentData {
-  if (role === "admin") return data;
+  if (role === "admin" || role === "superadmin") return data;
   const { creditReward, ...rest } = data;
   return rest;
 }
@@ -199,7 +199,7 @@ export async function listEmergencies(
       }));
     }
 
-    if (role !== "admin") {
+    if (role !== "admin" && role !== "superadmin") {
       docs = docs.map((d) => stripRewardForNonAdmin(role, d)) as any;
     }
 
@@ -236,7 +236,7 @@ export async function getEmergency(
       data.canApply = workerMatchesEmergency(specialization, data.categoryIds);
     }
 
-    if (role !== "admin") {
+    if (role !== "admin" && role !== "superadmin") {
       data = stripRewardForNonAdmin(role, data);
     }
 
@@ -379,8 +379,8 @@ export async function applyToEmergency(
       applicants: FieldValue.arrayUnion(newApplicant),
     });
 
-    // Notify all admins so they can review
-    const admins = await usersRef.where("role", "==", "admin").get();
+    // Notify admin-equivalent users so superadmins see the same review work.
+    const admins = await usersRef.where("role", "in", ["admin", "superadmin"]).get();
     for (const adminDoc of admins.docs) {
       await db.collection("notifications").add({
         userId: adminDoc.id,

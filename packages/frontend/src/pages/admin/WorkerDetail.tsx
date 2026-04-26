@@ -18,6 +18,7 @@ import {
   XCircle,
 } from "lucide-react";
 import api from "@/services/api";
+import { format12hRange } from "@/utils/time";
 import { firebaseAuth } from "@/config/firebase";
 import { BackButton } from "@/components/common/BackButton";
 import { getWorkerCredentialLabel } from "@/constants/workerCredentials";
@@ -131,6 +132,10 @@ export function WorkerDetail() {
   const [verifying, setVerifying] = useState(false);
   const [showCredentialUploader, setShowCredentialUploader] = useState(false);
   const [savingCredentials, setSavingCredentials] = useState(false);
+  const [selectedCredential, setSelectedCredential] = useState<{
+    name: string;
+    fileUrl: string;
+  } | null>(null);
   const [credentialDrafts, setCredentialDrafts] = useState<WorkerCredentialDraft[]>(
     []
   );
@@ -698,7 +703,7 @@ export function WorkerDetail() {
                   {DAY_NAMES[slot.dayOfWeek] || `Day ${slot.dayOfWeek}`}
                 </span>
                 <span className="text-slate-600">
-                  {slot.startTime} - {slot.endTime}
+                  {format12hRange(slot.startTime, slot.endTime)}
                 </span>
               </div>
             ))}
@@ -750,14 +755,18 @@ export function WorkerDetail() {
                       Uploaded {formatDate(credential.uploadedAt)}
                     </p>
                   </div>
-                  <a
-                    href={credential.fileUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setSelectedCredential({
+                        name,
+                        fileUrl: credential.fileUrl,
+                      })
+                    }
                     className="text-primary-600 hover:text-primary-700 font-medium shrink-0"
                   >
                     View File
-                  </a>
+                  </button>
                 </div>
               );
             })}
@@ -862,7 +871,7 @@ export function WorkerDetail() {
                         onClick={() => fileInputRefs.current[credential.id]?.click()}
                         className="btn-secondary text-sm"
                       >
-                        {credential.existingUrl ? "Replace File" : "Upload Photo"}
+                        {credential.existingUrl ? "Replace File" : "Upload File"}
                       </button>
                       {credential.file && (
                         <div className="flex items-center gap-2 text-sm text-emerald-600 font-medium">
@@ -966,6 +975,75 @@ export function WorkerDetail() {
               <p className="text-xs text-slate-500 text-center">
                 Keep this window open until enrollment finishes.
               </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {selectedCredential && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl flex flex-col max-h-[90vh]">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 shrink-0">
+              <div>
+                <h3 className="font-bold text-lg text-slate-900">
+                  {selectedCredential.name}
+                </h3>
+                <p className="text-xs text-slate-500">Submitted credential preview</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedCredential(null)}
+                className="text-slate-400 hover:text-slate-600 transition-colors"
+                aria-label="Close credential preview"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="overflow-auto px-4 py-4 flex-1 bg-slate-50">
+              {selectedCredential.fileUrl.startsWith("data:image/") ? (
+                <img
+                  src={selectedCredential.fileUrl}
+                  alt={selectedCredential.name}
+                  className="w-full h-auto rounded-lg border border-slate-200 bg-white object-contain"
+                />
+              ) : selectedCredential.fileUrl.startsWith("data:application/pdf") ? (
+                <iframe
+                  src={selectedCredential.fileUrl}
+                  title={selectedCredential.name}
+                  className="w-full min-h-[70vh] rounded-lg border border-slate-200 bg-white"
+                />
+              ) : (
+                <div className="rounded-lg border border-slate-200 bg-white p-6 text-center space-y-3">
+                  <p className="text-sm text-slate-600">
+                    This credential cannot be previewed inline.
+                  </p>
+                  <a
+                    href={selectedCredential.fileUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center justify-center rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700"
+                  >
+                    Open File
+                  </a>
+                </div>
+              )}
+            </div>
+            <div className="px-6 py-4 border-t border-slate-200 shrink-0 flex gap-3">
+              <a
+                href={selectedCredential.fileUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex-1 text-center rounded-lg border border-primary-200 px-4 py-2 text-sm font-medium text-primary-700 hover:bg-primary-50"
+              >
+                Open in New Tab
+              </a>
+              <button
+                type="button"
+                onClick={() => setSelectedCredential(null)}
+                className="flex-1 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700"
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>

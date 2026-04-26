@@ -4,6 +4,8 @@ import { toast } from "sonner";
 import { Briefcase, Clock, MapPin, Star, Edit2 } from "lucide-react";
 import api from "@/services/api";
 import { useAuth } from "@/contexts/AuthContext";
+import { format12h } from "@/utils/time";
+import { useRequestCollectionLiveRefresh } from "@/hooks/useRequestLiveRefresh";
 
 interface Request {
   id: string;
@@ -16,6 +18,7 @@ interface Request {
   schedule: { date: string | { _seconds: number }; startTime: string; endTime: string };
   status: string;
   workerName?: string;
+  workerProfilePhotoUrl?: string;
   workerRating?: number;
   completedAt?: any;
   updatedAt?: any;
@@ -28,6 +31,7 @@ const ACTIVE_STATUSES = [
   "pending",
   "assigned",
   "accepted",
+  "acceptance_expired",
   "worker_arrived",
   "price_confirmed",
   "in_progress",
@@ -37,7 +41,7 @@ const COMPLETED_STATUSES = ["payment_confirmed"];
 const HISTORY_STATUSES = [...COMPLETED_STATUSES, "cancelled"];
 
 export function MyRequests() {
-  useAuth();
+  const { userProfile } = useAuth();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<Tab>("active");
   const [isLoading, setIsLoading] = useState(true);
@@ -47,7 +51,15 @@ export function MyRequests() {
     fetchRequests();
   }, []);
 
-  const fetchRequests = async () => {
+  useRequestCollectionLiveRefresh(
+    "residentId",
+    "==",
+    userProfile?.uid,
+    fetchRequests,
+    Boolean(userProfile?.uid)
+  );
+
+  async function fetchRequests() {
     try {
       const { data } = await api.get("/api/requests/my");
       setRequests(data.requests || []);
@@ -56,7 +68,7 @@ export function MyRequests() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }
 
   const requestGroups = useMemo(
     () => ({
@@ -80,6 +92,7 @@ export function MyRequests() {
       pending: "bg-orange-50 text-orange-700 border-orange-200",
       assigned: "bg-yellow-50 text-yellow-700 border-yellow-200",
       accepted: "bg-primary-50 text-primary-700 border-primary-200",
+      acceptance_expired: "bg-red-50 text-red-700 border-red-200",
       worker_arrived: "bg-purple-50 text-purple-700 border-purple-200",
       price_confirmed: "bg-indigo-50 text-indigo-700 border-indigo-200",
       in_progress: "bg-accent-50 text-accent-700 border-accent-200",
@@ -203,7 +216,7 @@ export function MyRequests() {
                   {typeof request.schedule.date === "object"
                     ? new Date(request.schedule.date._seconds * 1000).toLocaleDateString()
                     : request.schedule.date}{" "}
-                  {request.schedule.startTime ? `${request.schedule.startTime}` : "No specified time"}
+                  {request.schedule.startTime ? format12h(request.schedule.startTime) : "No specified time"}
                 </span>
                 <span className="flex items-center gap-1">
                   <MapPin size={14} />
@@ -212,18 +225,40 @@ export function MyRequests() {
                 </span>
               </div>
 
-              <div className="flex items-center justify-between pt-3 border-t border-slate-100">
-                <div className="flex-1">
+              <div className="flex items-center justify-between gap-3 pt-3 border-t border-slate-100">
+                <div className="min-w-0 flex-1">
                   {request.workerName && (
-                    <p className="text-xs text-slate-600">
-                      Worker:{" "}
-                      <span className="font-medium">{request.workerName}</span>
-                    </p>
-                  )}
-                  {request.workerRating && (
-                    <div className="flex items-center gap-1 text-xs text-yellow-600 mt-1">
-                      <Star size={12} fill="currentColor" />
-                      <span>{request.workerRating.toFixed(1)}</span>
+                    <div className="flex items-center gap-2">
+                      {request.workerProfilePhotoUrl ? (
+                        <img
+                          src={request.workerProfilePhotoUrl}
+                          alt={request.workerName}
+                          className="h-9 w-9 rounded-full border border-slate-200 object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-100 text-xs font-bold text-primary-700">
+                          {request.workerName
+                            .split(" ")
+                            .map((part) => part[0])
+                            .join("")
+                            .slice(0, 2)
+                            .toUpperCase()}
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <p className="truncate text-xs text-slate-600">
+                          Worker:{" "}
+                          <span className="font-medium text-slate-800">
+                            {request.workerName}
+                          </span>
+                        </p>
+                        {typeof request.workerRating === "number" && (
+                          <div className="mt-0.5 flex items-center gap-1 text-xs text-yellow-600">
+                            <Star size={12} fill="currentColor" />
+                            <span>{request.workerRating.toFixed(1)} rating</span>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>

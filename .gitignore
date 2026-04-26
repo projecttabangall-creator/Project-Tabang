@@ -21,6 +21,7 @@ scripts/.env.seed.*
 firestore-debug.log
 ui-debug.log
 emulator-data/
+fingerprint-service/enrollments.json
 
 # IDE
 .vscode/

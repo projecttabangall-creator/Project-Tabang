@@ -15,12 +15,15 @@ import {
   cancelRequest,
   completeRequest,
   createRequest,
+  getAvailableRequests,
   getMyRequests,
   getRequest,
   listRequests,
   markArrived,
   rateWorker,
   rejectRequest,
+  repostRequest,
+  resolveAcceptanceTimeout,
   setFinalPrice,
   updateSchedule,
   workerCancelRequest,
@@ -41,9 +44,15 @@ requestRouter.get("/", roleGuard("admin"), listRequests);
 
 requestRouter.get("/my", roleGuard("resident", "worker"), getMyRequests);
 
+requestRouter.get("/available", roleGuard("worker"), getAvailableRequests);
+
 requestRouter.get("/:id", getRequest);
 
-requestRouter.patch("/:id/accept", roleGuard("worker"), acceptRequest);
+requestRouter.patch(
+  "/:id/accept",
+  roleGuard("worker"),
+  acceptRequest
+);
 
 requestRouter.patch("/:id/reject", roleGuard("worker"), rejectRequest);
 
@@ -61,9 +70,21 @@ requestRouter.patch("/:id/complete", roleGuard("worker"), completeRequest);
 requestRouter.patch("/:id/worker-cancel", roleGuard("worker"), workerCancelRequest);
 
 requestRouter.patch(
+  "/:id/acceptance-timeout",
+  roleGuard("resident"),
+  resolveAcceptanceTimeout
+);
+
+requestRouter.patch(
   "/:id/cancel",
   roleGuard("resident", "worker", "admin"),
   cancelRequest
+);
+
+requestRouter.patch(
+  "/:id/repost",
+  roleGuard("resident"),
+  repostRequest
 );
 
 requestRouter.patch(

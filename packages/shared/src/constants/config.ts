@@ -26,6 +26,10 @@ export const ASSIGNMENT_WEIGHTS = {
 
 export const DEFAULT_NEW_WORKER_RATING_SCORE = 0.6;
 export const MIN_CREDIT_FOR_ASSIGNMENT = 3;
+// Workers with fewer completed jobs than this threshold are treated as "rookies":
+// they bypass the auto-assignment scoring and instead see ALL pending requests in their
+// specialization on a first-come-first-served basis.
+export const ROOKIE_JOB_THRESHOLD = 5;
 
 // Map
 export const DEFAULT_MAP_CENTER = {

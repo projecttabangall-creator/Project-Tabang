@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { BackButton } from "@/components/common/BackButton";
+import { format12hRange } from "@/utils/time";
 import {
   AlertCircle,
   Ban,
@@ -311,7 +312,7 @@ export function AdminRequestDetail() {
           <p>
             <span className="text-slate-600">Time:</span>{" "}
             <span className="font-medium">
-              {request.schedule?.startTime ? `${request.schedule.startTime} – ${request.schedule.endTime}` : "No specified time"}
+              {request.schedule?.startTime ? format12hRange(request.schedule.startTime, request.schedule.endTime) : "No specified time"}
             </span>
           </p>
           {request.schedule?.numberOfDays && (

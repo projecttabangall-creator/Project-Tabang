@@ -3,6 +3,7 @@ import { db } from "../config/firebase";
 import { logger } from "firebase-functions";
 import { REQUEST_STATUSES } from "@tabang/shared";
 import { attemptRequestAssignment } from "../services/requestAssignment.service";
+import { bumpPendingRequestPoolSignal } from "../services/requestSignal.service";
 
 interface Request {
   id?: string;
@@ -24,6 +25,10 @@ export const onRequestUpdated = onDocumentUpdated(
     }
 
     const statusChanged = before.status !== after.status;
+    const pendingPoolCouldChange =
+      (before.status === REQUEST_STATUSES.PENDING && !before.assignedWorkerId) ||
+      (after.status === REQUEST_STATUSES.PENDING && !after.assignedWorkerId) ||
+      before.assignedWorkerId !== after.assignedWorkerId;
 
     try {
 
@@ -33,7 +38,12 @@ export const onRequestUpdated = onDocumentUpdated(
       !after.assignedWorkerId
     ) {
       const result = await attemptRequestAssignment(requestId, after);
+      await bumpPendingRequestPoolSignal();
       logger.info(`Reassignment result for request ${requestId}: ${result}`);
+    }
+
+    if (pendingPoolCouldChange) {
+      await bumpPendingRequestPoolSignal();
     }
 
     if (!statusChanged) {
@@ -65,6 +75,15 @@ export const onRequestUpdated = onDocumentUpdated(
             type: "acceptance",
             title: "Job Accepted",
             body: "Your assigned worker has accepted the job",
+          });
+          break;
+
+        case "acceptance_expired":
+          notifications.push({
+            userId: after.residentId,
+            type: "system",
+            title: "Worker Did Not Proceed",
+            body: "Your worker accepted more than 24 hours ago but has not arrived. Please cancel or repost the request.",
           });
           break;
 

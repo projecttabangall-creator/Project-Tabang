@@ -2,6 +2,7 @@ export type RequestStatus =
   | "pending"
   | "assigned"
   | "accepted"
+  | "acceptance_expired"
   | "worker_arrived"
   | "price_confirmed"
   | "in_progress"
@@ -18,6 +19,12 @@ export interface RequestSchedule {
   date: Date;
   startTime: string; // "08:00"
   endTime: string; // "17:00"
+  numberOfDays?: number;
+  workingSchedule?: Array<{
+    date: string;
+    startTime: string;
+    endTime: string;
+  }>;
 }
 
 export interface ServiceRequest {
@@ -54,6 +61,9 @@ export interface ServiceRequest {
   // Assignment
   assignedWorkerId?: string;
   assignedWorkerName?: string;
+  acceptanceExpiredAt?: Date;
+  acceptanceExpiredWorkerId?: string;
+  acceptanceExpiredWorkerName?: string;
   assignmentScore?: number;
   assignmentAttempts: number;
   excludedWorkerIds?: string[];

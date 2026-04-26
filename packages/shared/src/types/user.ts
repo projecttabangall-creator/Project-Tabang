@@ -17,6 +17,16 @@ export type AvailabilitySlot =
   | { type: "specific"; date: string; startTime: string; endTime: string }
   | { dayOfWeek: number; startTime: string; endTime: string }; // legacy/backward compat - treated as recurring
 
+export interface WorkingScheduleEntry {
+  requestId: string;
+  categoryName: string;
+  itemName: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  status: string;
+}
+
 export interface WorkerData {
   specialization: string[]; // category IDs
   credentials: Credential[];
@@ -33,6 +43,7 @@ export interface WorkerData {
     longitude: number;
   };
   availability: AvailabilitySlot[];
+  workingSchedule?: WorkingScheduleEntry[];
   isAvailable: boolean;
 }
 
@@ -62,6 +73,11 @@ export interface User {
   otpVerified: boolean;
   failedLoginAttempts: number;
   lockedUntil?: Date;
+  biometricEnrolled?: boolean;
+  lastFingerprintVerification?: {
+    verified: boolean;
+    timestamp: Date;
+  };
   createdAt: Date;
   updatedAt: Date;
   workerData?: WorkerData;
