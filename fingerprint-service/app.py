@@ -22,6 +22,12 @@ ENROLLMENTS_FILE = os.getenv(
 
 enrolled_identities = {}
 enrollment_status = {}
+VALID_ROLES = {"worker", "admin", "superadmin"}
+UNKNOWN_SENSOR_TEMPLATE_MESSAGE = (
+    "Fingerprint already exists on this device but is not linked to an account. "
+    "Ask an admin to reset the sensor or repair enrollments.json."
+)
+DUPLICATE_FINGERPRINT_MESSAGE = "Fingerprint already enrolled to another account."
 
 
 def load_enrollments():
@@ -33,13 +39,34 @@ def load_enrollments():
     try:
         with open(ENROLLMENTS_FILE, "r", encoding="utf-8") as fp:
             data = json.load(fp)
-        if isinstance(data, dict):
-            enrolled_identities = data
-        else:
-            enrolled_identities = {}
+        enrolled_identities = sanitize_enrollments(data)
     except Exception as error:
         print(f"[FINGERPRINT SERVICE] Failed to load enrollments: {error}")
         enrolled_identities = {}
+
+
+def sanitize_enrollments(data):
+    if not isinstance(data, dict):
+        return {}
+
+    sanitized = {}
+    for user_id, record in data.items():
+        if not isinstance(user_id, str) or not isinstance(record, dict):
+            print(f"[FINGERPRINT SERVICE] Ignoring malformed enrollment for {user_id}")
+            continue
+
+        position = record.get("position")
+        role = record.get("role")
+        if not isinstance(position, int) or role not in VALID_ROLES:
+            print(f"[FINGERPRINT SERVICE] Ignoring invalid enrollment for {user_id}")
+            continue
+
+        sanitized[user_id] = {
+            "position": position,
+            "role": role,
+        }
+
+    return sanitized
 
 
 def save_enrollments():
@@ -72,6 +99,56 @@ def find_identity_by_position(position):
         if record.get("position") == position:
             return user_id, record
     return None, None
+
+
+def get_user_record(user_id):
+    record = enrolled_identities.get(user_id)
+    if not isinstance(record, dict):
+        return None
+    return record
+
+
+def delete_template_if_present(fp, position):
+    if not isinstance(position, int) or position < 0:
+        return False
+
+    try:
+        fp.deleteTemplate(position)
+        print(f"[ENROLL] Deleted old fingerprint template at position {position}")
+        return True
+    except Exception as error:
+        print(
+            f"[ENROLL] Warning: could not delete template at position {position}: {error}"
+        )
+        return False
+
+
+def remove_stale_position(position):
+    stale_user_ids = [
+        existing_user_id
+        for existing_user_id, record in enrolled_identities.items()
+        if record.get("position") == position
+    ]
+    for existing_user_id in stale_user_ids:
+        enrolled_identities.pop(existing_user_id, None)
+
+
+def reject_duplicate(user_id, position, existing_user_id, existing_record):
+    if position < 0:
+        return None
+
+    if not existing_user_id:
+        return UNKNOWN_SENSOR_TEMPLATE_MESSAGE
+
+    if existing_user_id != user_id:
+        existing_role = existing_record.get("role", "another account")
+        print(
+            f"[ENROLL] Duplicate fingerprint at position {position}; "
+            f"owned by {existing_role} {existing_user_id}"
+        )
+        return DUPLICATE_FINGERPRINT_MESSAGE
+
+    return None
 
 
 def sync_biometric_status(user_id, role, auth_token, biometric_enrolled):
@@ -117,7 +194,7 @@ def enroll():
     if not user_id:
         return jsonify({"error": "userId is required"}), 400
 
-    if role not in {"worker", "admin", "superadmin"}:
+    if role not in VALID_ROLES:
         return jsonify({"error": "role is required"}), 400
 
     set_enrollment_status(user_id, "starting", "Preparing the fingerprint scanner.")
@@ -147,15 +224,23 @@ def enroll():
 
         result = fp.searchTemplate()
         position = result[0]
+        user_record = get_user_record(user_id)
+        is_reenrollment = user_record is not None
         if position >= 0:
             existing_user_id, existing_record = find_identity_by_position(position)
-            if existing_user_id and existing_user_id != user_id:
+            duplicate_error = reject_duplicate(
+                user_id,
+                position,
+                existing_user_id,
+                existing_record,
+            )
+            if duplicate_error:
                 set_enrollment_status(
                     user_id,
                     "error",
-                    f"Fingerprint already enrolled for {existing_record.get('role', 'another account')}.",
+                    duplicate_error,
                 )
-                return jsonify({"error": "Fingerprint already enrolled"}), 409
+                return jsonify({"error": duplicate_error}), 409
 
         set_enrollment_status(
             user_id,
@@ -189,6 +274,12 @@ def enroll():
             return jsonify({"error": "Fingerprints did not match. Try again."}), 400
 
         fp.createTemplate()
+
+        if user_record:
+            old_position = user_record.get("position")
+            delete_template_if_present(fp, old_position)
+            remove_stale_position(old_position)
+
         stored_position = fp.storeTemplate()
 
         enrolled_identities[user_id] = {
@@ -211,9 +302,18 @@ def enroll():
         set_enrollment_status(
             user_id,
             "complete",
-            "Fingerprint enrolled successfully.",
+            "Fingerprint re-enrolled successfully."
+            if is_reenrollment
+            else "Fingerprint enrolled successfully.",
         )
-        return jsonify({"success": True, "message": "Fingerprint enrolled successfully"}), 200
+        return jsonify({
+            "success": True,
+            "message": (
+                "Fingerprint re-enrolled successfully."
+                if is_reenrollment
+                else "Fingerprint enrolled successfully"
+            ),
+        }), 200
     except Exception as error:
         set_enrollment_status(user_id, "error", f"Enrollment failed: {error}")
         return jsonify({"error": f"Enrollment failed: {error}"}), 500

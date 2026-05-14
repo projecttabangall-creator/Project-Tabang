@@ -352,6 +352,7 @@ WantedBy=multi-user.target
 | Frontend cannot reach backend | Wrong API URL | Check the functions emulator on `5001` |
 | Fingerprint service unavailable | Python service not running | Start `app.py` and confirm port `5000` |
 | Fingerprint template lost | In-memory storage only | Re-enroll or add persistent storage |
+| Fingerprint already exists but is not linked | Sensor templates and `fingerprint-service/enrollments.json` are out of sync | On a test device, clear the sensor database and reset `enrollments.json`; in production, preserve the file and repair the missing account mapping before enrolling more users |
 
 ## References
 
