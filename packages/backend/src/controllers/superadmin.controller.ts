@@ -2,6 +2,7 @@ import { Response } from "express";
 import { AuthenticatedRequest } from "../middleware/auth";
 import { db, auth } from "../config/firebase";
 import { FieldValue } from "firebase-admin/firestore";
+import { deleteFingerprintEnrollment } from "../services/fingerprintCleanup.service";
 
 const usersRef = db.collection("users");
 
@@ -118,6 +119,10 @@ export async function listAdmins(
 
     const admins = snapshot.docs.map((doc) => {
       const data = doc.data();
+      const createdAt =
+        data.createdAt && typeof data.createdAt.toDate === "function"
+          ? data.createdAt.toDate().toISOString()
+          : null;
       return {
         id: doc.id,
         firstName: data.firstName,
@@ -126,7 +131,7 @@ export async function listAdmins(
         email: data.email,
         accountStatus: data.accountStatus,
         isActive: data.isActive,
-        createdAt: data.createdAt,
+        createdAt,
       };
     });
 
@@ -204,6 +209,17 @@ export async function deleteAdmin(
     }
 
     const data = doc.data()!;
+
+    const fingerprintCleanup = await deleteFingerprintEnrollment(id);
+    if (fingerprintCleanup.attempted && !fingerprintCleanup.success) {
+      await db.collection("systemLogs").add({
+        action: "fingerprint_cleanup_failed",
+        performedBy: req.user!.uid,
+        targetUserId: id,
+        details: `Could not remove fingerprint enrollment before deleting admin account: ${fingerprintCleanup.message}`,
+        createdAt: FieldValue.serverTimestamp(),
+      });
+    }
 
     // Delete from Firebase Auth
     try {

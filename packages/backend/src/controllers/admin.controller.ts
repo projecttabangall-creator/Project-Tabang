@@ -1,7 +1,12 @@
 import { Response } from "express";
 import { AuthenticatedRequest } from "../middleware/auth";
 import { auth, db } from "../config/firebase";
-import { FieldValue, Timestamp } from "firebase-admin/firestore";
+import { FieldPath, FieldValue, Timestamp } from "firebase-admin/firestore";
+import {
+  getResidentCancellationStats,
+} from "../services/residentCancellation.service";
+import { deleteFingerprintEnrollment } from "../services/fingerprintCleanup.service";
+import { getMonthlyJobsAssigned } from "../utils/assignmentStats";
 
 const usersRef = db.collection("users");
 const passwordResetRequestsRef = db.collection("passwordResetRequests");
@@ -33,6 +38,131 @@ function toDate(value: unknown): Date | null {
 
   const parsed = new Date(value as string | number);
   return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function parseCursor(
+  cursor: unknown
+): { createdAt: FirebaseFirestore.Timestamp; id: string } | null {
+  if (typeof cursor !== "string" || !cursor.trim()) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(
+      Buffer.from(cursor, "base64url").toString("utf8")
+    ) as { createdAtMs?: number; id?: string };
+
+    if (
+      typeof parsed?.createdAtMs !== "number" ||
+      !Number.isFinite(parsed.createdAtMs) ||
+      typeof parsed?.id !== "string" ||
+      !parsed.id.trim()
+    ) {
+      return null;
+    }
+
+    return {
+      createdAt: Timestamp.fromMillis(parsed.createdAtMs),
+      id: parsed.id,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function buildCursor(doc: FirebaseFirestore.QueryDocumentSnapshot): string | null {
+  const createdAt = doc.data()?.createdAt;
+  if (!(createdAt instanceof Timestamp)) {
+    return null;
+  }
+
+  return Buffer.from(
+    JSON.stringify({
+      createdAtMs: createdAt.toMillis(),
+      id: doc.id,
+    }),
+    "utf8"
+  ).toString("base64url");
+}
+
+function compareCreatedAtAndIdDesc(
+  leftCreatedAt: unknown,
+  leftId: string,
+  rightCreatedAt: Timestamp,
+  rightId: string
+): number {
+  const leftMillis = leftCreatedAt instanceof Timestamp ? leftCreatedAt.toMillis() : 0;
+  const rightMillis = rightCreatedAt.toMillis();
+
+  if (leftMillis !== rightMillis) {
+    return rightMillis - leftMillis;
+  }
+
+  if (leftId === rightId) {
+    return 0;
+  }
+
+  return leftId < rightId ? 1 : -1;
+}
+
+function isListableUserRole(role: unknown): role is "resident" | "worker" | "admin" {
+  return role === "resident" || role === "worker" || role === "admin";
+}
+
+async function listUsersWithInMemoryPagination({
+  role,
+  parsedLimit,
+  parsedCursor,
+}: {
+  role?: string;
+  parsedLimit: number;
+  parsedCursor: { createdAt: FirebaseFirestore.Timestamp; id: string } | null;
+}): Promise<{
+  docs: FirebaseFirestore.QueryDocumentSnapshot[];
+  hasMore: boolean;
+  nextCursor: string | null;
+  totalCount: number;
+}> {
+  const snapshot = role ? await usersRef.where("role", "==", role).get() : await usersRef.get();
+
+  const filteredDocs = snapshot.docs
+    .filter((doc) => {
+      const docRole = doc.data()?.role;
+      if (role) {
+        return docRole === role;
+      }
+      return isListableUserRole(docRole);
+    })
+    .sort((left, right) =>
+      compareCreatedAtAndIdDesc(
+        left.data()?.createdAt,
+        left.id,
+        right.data()?.createdAt instanceof Timestamp ? right.data().createdAt : Timestamp.fromMillis(0),
+        right.id
+      )
+    );
+
+  const totalCount = filteredDocs.length;
+  let startIndex = 0;
+
+  if (parsedCursor) {
+    const cursorIndex = filteredDocs.findIndex(
+      (doc) =>
+        compareCreatedAtAndIdDesc(
+          doc.data()?.createdAt,
+          doc.id,
+          parsedCursor.createdAt,
+          parsedCursor.id
+        ) > 0
+    );
+    startIndex = cursorIndex >= 0 ? cursorIndex : totalCount;
+  }
+
+  const docs = filteredDocs.slice(startIndex, startIndex + parsedLimit);
+  const hasMore = startIndex + parsedLimit < totalCount;
+  const nextCursor = hasMore && docs.length > 0 ? buildCursor(docs[docs.length - 1]) : null;
+
+  return { docs, hasMore, nextCursor, totalCount };
 }
 
 /**
@@ -104,15 +234,53 @@ export async function listUsers(
   res: Response
 ): Promise<void> {
   try {
-    const { role } = req.query;
-    let query: FirebaseFirestore.Query = usersRef;
+    const { role, limit, cursor } = req.query;
+    const parsedLimit =
+      typeof limit === "string" ? Math.min(Math.max(parseInt(limit, 10) || 25, 1), 200) : 25;
+    const parsedCursor = parseCursor(cursor);
+    let baseQuery: FirebaseFirestore.Query;
 
     if (role && typeof role === "string") {
-      query = query.where("role", "==", role);
+      baseQuery = usersRef.where("role", "==", role);
+    } else {
+      baseQuery = usersRef.where("role", "in", ["resident", "worker", "admin"]);
     }
 
-    const snapshot = await query.get();
-    const users = snapshot.docs.map((doc) => {
+    const totalCountSnapshot = await baseQuery.count().get();
+    const totalCount = totalCountSnapshot.data().count;
+
+    let docs: FirebaseFirestore.QueryDocumentSnapshot[];
+    let hasMore: boolean;
+    let nextCursor: string | null;
+
+    try {
+      let query = baseQuery
+        .orderBy("createdAt", "desc")
+        .orderBy(FieldPath.documentId(), "desc");
+
+      if (parsedCursor) {
+        query = query.startAfter(parsedCursor.createdAt, parsedCursor.id);
+      }
+
+      query = query.limit(parsedLimit + 1);
+
+      const snapshot = await query.get();
+      docs = snapshot.docs.slice(0, parsedLimit);
+      hasMore = snapshot.docs.length > parsedLimit;
+      nextCursor = hasMore && docs.length > 0 ? buildCursor(docs[docs.length - 1]) : null;
+    } catch (error) {
+      console.error("List users query fallback:", error);
+      const fallbackResult = await listUsersWithInMemoryPagination({
+        role: typeof role === "string" ? role : undefined,
+        parsedLimit,
+        parsedCursor,
+      });
+      docs = fallbackResult.docs;
+      hasMore = fallbackResult.hasMore;
+      nextCursor = fallbackResult.nextCursor;
+    }
+
+    const users = docs.map((doc) => {
       const data = doc.data();
       return {
         id: doc.id,
@@ -132,10 +300,59 @@ export async function listUsers(
       };
     });
 
-    res.json({ users });
+    res.json({ users, nextCursor, hasMore, totalCount });
   } catch (error) {
     console.error("List users error:", error);
     res.status(500).json({ error: "Failed to fetch users" });
+  }
+}
+
+export async function getUser(
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> {
+  try {
+    const id = req.params.id as string;
+    const doc = await usersRef.doc(id).get();
+    if (!doc.exists) {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+    const data = doc.data()!;
+    const residentCancellationStats =
+      data.role === "resident"
+        ? await getResidentCancellationStats(doc.id)
+        : null;
+    if (data.role === "superadmin") {
+      res.status(403).json({ error: "Forbidden" });
+      return;
+    }
+    res.json({
+      user: {
+        id: doc.id,
+        role: data.role,
+        firstName: data.firstName,
+        lastName: data.lastName,
+        contactNumber: data.contactNumber,
+        email: data.email,
+        creditPoints: data.creditPoints,
+        isVerified: data.isVerified,
+        isActive: data.isActive,
+        accountStatus: data.accountStatus,
+        suspendReason: data.suspendReason,
+        suspendUntil: data.suspendUntil ? toDate(data.suspendUntil) : null,
+        address: data.address,
+        createdAt: data.createdAt ? toDate(data.createdAt) : null,
+        biometricEnrolled: data.biometricEnrolled ?? false,
+        mustChangePassword: data.mustChangePassword ?? false,
+        totalRequests: residentCancellationStats?.totalRequests ?? 0,
+        cancelledRequests: residentCancellationStats?.cancelledRequests ?? 0,
+        cancellationRate: residentCancellationStats?.cancellationRate ?? 0,
+      },
+    });
+  } catch (error) {
+    console.error("Get user error:", error);
+    res.status(500).json({ error: "Failed to fetch user" });
   }
 }
 
@@ -220,12 +437,30 @@ export async function resolveNameChangeRequest(
     }
 
     if (action === "approve") {
+      const newFirstName = requestData.requestedFirstName;
+      const newLastName = requestData.requestedLastName;
+
       await userRef.update({
-        firstName: requestData.requestedFirstName,
-        lastName: requestData.requestedLastName,
+        firstName: newFirstName,
+        lastName: newLastName,
         pendingNameChangeRequestId: FieldValue.delete(),
         updatedAt: FieldValue.serverTimestamp(),
       });
+
+      // Update denormalized resident name in all service requests
+      const requestsSnapshot = await db
+        .collection("serviceRequests")
+        .where("residentId", "==", requestData.userId)
+        .get();
+
+      const batch = db.batch();
+      for (const doc of requestsSnapshot.docs) {
+        batch.update(doc.ref, {
+          residentName: `${newFirstName} ${newLastName}`,
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      }
+      await batch.commit();
     } else {
       await userRef.update({
         pendingNameChangeRequestId: FieldValue.delete(),
@@ -739,14 +974,19 @@ export async function getAnalyticsStats(
   res: Response
 ): Promise<void> {
   try {
-    const [requestSnapshot, workerSnapshot] = await Promise.all([
+    const [requestSnapshot, workerSnapshot, residentSnapshot] = await Promise.all([
       db.collection("serviceRequests").get(),
       db.collection("users").where("role", "==", "worker").get(),
+      db.collection("users").where("role", "==", "resident").get(),
     ]);
 
     // Requests by status
     const statusCounts: Record<string, number> = {};
     const categoryCounts: Record<string, number> = {};
+    const residentRequestCounts = new Map<
+      string,
+      { totalRequests: number; cancelledRequests: number }
+    >();
 
     for (const doc of requestSnapshot.docs) {
       const data = doc.data();
@@ -758,6 +998,23 @@ export async function getAnalyticsStats(
       // Group by category
       const catName = data.categoryName || "Uncategorized";
       categoryCounts[catName] = (categoryCounts[catName] || 0) + 1;
+
+      const residentId =
+        typeof data.residentId === "string" ? data.residentId : null;
+      if (residentId) {
+        const counts = residentRequestCounts.get(residentId) ?? {
+          totalRequests: 0,
+          cancelledRequests: 0,
+        };
+
+        counts.totalRequests += 1;
+
+        if (status === "cancelled" && data.cancelledBy === residentId) {
+          counts.cancelledRequests += 1;
+        }
+
+        residentRequestCounts.set(residentId, counts);
+      }
     }
 
     // Top 6 categories by count
@@ -795,6 +1052,7 @@ export async function getAnalyticsStats(
           id: workerId,
           name: `${data.firstName || ""} ${data.lastName || ""}`.trim(),
           averageRating: wd.averageRating || 0,
+          monthlyJobsAssigned: getMonthlyJobsAssigned(wd),
           completedJobs,
           acceptanceRate,
         };
@@ -802,10 +1060,64 @@ export async function getAnalyticsStats(
       .sort((a, b) => b.averageRating - a.averageRating || b.completedJobs - a.completedJobs)
       .slice(0, 10);
 
+    const residentRates = residentSnapshot.docs
+      .map((doc) => {
+        const data = doc.data();
+        const counts = residentRequestCounts.get(doc.id) ?? {
+          totalRequests: 0,
+          cancelledRequests: 0,
+        };
+        const cancellationRate =
+          counts.totalRequests > 0
+            ? Math.round((counts.cancelledRequests / counts.totalRequests) * 1000) / 10
+            : 0;
+
+        return {
+          id: doc.id,
+          name: `${data.firstName || ""} ${data.lastName || ""}`.trim(),
+          totalRequests: counts.totalRequests,
+          cancelledRequests: counts.cancelledRequests,
+          cancellationRate,
+        };
+      })
+      .filter((resident) => resident.totalRequests > 0)
+      .sort(
+        (a, b) =>
+          b.cancellationRate - a.cancellationRate ||
+          b.cancelledRequests - a.cancelledRequests ||
+          b.totalRequests - a.totalRequests ||
+          a.name.localeCompare(b.name)
+      )
+      .slice(0, 10);
+
+    const totalResidentRequests = residentSnapshot.docs.reduce((sum, doc) => {
+      const counts = residentRequestCounts.get(doc.id);
+      return sum + (counts?.totalRequests ?? 0);
+    }, 0);
+    const residentCancelledRequests = residentSnapshot.docs.reduce((sum, doc) => {
+      const counts = residentRequestCounts.get(doc.id);
+      return sum + (counts?.cancelledRequests ?? 0);
+    }, 0);
+    const residentsWithCancellation = residentSnapshot.docs.reduce((sum, doc) => {
+      const counts = residentRequestCounts.get(doc.id);
+      return sum + ((counts?.cancelledRequests ?? 0) > 0 ? 1 : 0);
+    }, 0);
+    const overallCancellationRate =
+      totalResidentRequests > 0
+        ? Math.round((residentCancelledRequests / totalResidentRequests) * 1000) / 10
+        : 0;
+
     res.json({
       requestsByStatus: statusCounts,
       requestsByCategory,
       workerPerformance,
+      residentCancellation: {
+        totalResidentRequests,
+        residentCancelledRequests,
+        residentsWithCancellation,
+        overallCancellationRate,
+        residentRates,
+      },
     });
   } catch (error) {
     console.error("Analytics stats error:", error);
@@ -845,6 +1157,11 @@ export async function deleteUser(
 ): Promise<void> {
   const id = req.params.id as string;
 
+  if (req.user!.role !== "superadmin") {
+    res.status(403).json({ error: "Only superadmin can delete accounts" });
+    return;
+  }
+
   if (id === req.user!.uid) {
     res.status(400).json({ error: "Cannot delete your own account" });
     return;
@@ -858,6 +1175,22 @@ export async function deleteUser(
     }
 
     const data = doc.data()!;
+
+    if (data.role === "superadmin") {
+      res.status(403).json({ error: "Superadmin accounts cannot be deleted from here" });
+      return;
+    }
+
+    const fingerprintCleanup = await deleteFingerprintEnrollment(id);
+    if (fingerprintCleanup.attempted && !fingerprintCleanup.success) {
+      await db.collection("systemLogs").add({
+        action: "fingerprint_cleanup_failed",
+        performedBy: req.user!.uid,
+        targetUserId: id,
+        details: `Could not remove fingerprint enrollment before deleting ${data.role} account: ${fingerprintCleanup.message}`,
+        createdAt: FieldValue.serverTimestamp(),
+      });
+    }
 
     try {
       await auth.deleteUser(id);

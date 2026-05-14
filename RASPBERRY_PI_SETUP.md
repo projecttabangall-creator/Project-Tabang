@@ -344,6 +344,25 @@ WantedBy=multi-user.target
 
 ## Troubleshooting
 
+### Reset fingerprint templates on a test device
+
+Use this only when it is acceptable to re-enroll every fingerprint user:
+
+```bash
+sudo systemctl stop tabang-fingerprint
+cd ~/project-tabang/fingerprint-service
+cp enrollments.json enrollments.backup.$(date +%Y%m%d-%H%M%S).json 2>/dev/null || true
+printf '{}\n' > enrollments.json
+python3 reset_fingerprint_sensor.py
+sudo systemctl start tabang-fingerprint
+sudo systemctl status tabang-fingerprint
+```
+
+For account-deletion cleanup, set `FINGERPRINT_ADMIN_SECRET` in
+`fingerprint-service/.env`. If the backend runs where it can reach the Pi, also
+set `FINGERPRINT_SERVICE_URL` and the same `FINGERPRINT_ADMIN_SECRET` in the
+backend environment.
+
 | Issue | Cause | Fix |
 |-------|-------|-----|
 | Sensor not found | UART not enabled | Enable serial port hardware in `raspi-config` |

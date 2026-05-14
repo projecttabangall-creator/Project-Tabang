@@ -15,6 +15,10 @@ FINGERPRINT_PORT = os.getenv("FINGERPRINT_PORT", "/dev/ttyS0")
 FINGERPRINT_BAUD = int(os.getenv("FINGERPRINT_BAUD", "57600"))
 API_BASE_URL = os.getenv("API_BASE_URL", "https://project-tabang---claude-code.web.app/api")
 FINGERPRINT_LOGIN_SECRET = os.getenv("FINGERPRINT_LOGIN_SECRET", "")
+FINGERPRINT_ADMIN_SECRET = os.getenv(
+    "FINGERPRINT_ADMIN_SECRET",
+    FINGERPRINT_LOGIN_SECRET,
+)
 ENROLLMENTS_FILE = os.getenv(
     "FINGERPRINT_ENROLLMENTS_FILE",
     os.path.join(os.path.dirname(__file__), "enrollments.json"),
@@ -92,6 +96,18 @@ def get_sensor():
         return fp
     except Exception as error:
         raise Exception(f"Fingerprint sensor not available: {error}")
+
+
+def is_authorized_admin_request():
+    if not FINGERPRINT_ADMIN_SECRET:
+        return True
+
+    provided_secret = (
+        request.headers.get("x-fingerprint-admin-secret")
+        or request.headers.get("x-fingerprint-login-secret")
+        or ""
+    )
+    return provided_secret == FINGERPRINT_ADMIN_SECRET
 
 
 def find_identity_by_position(position):
@@ -182,6 +198,47 @@ def request_login_token(user_id, role):
         headers={"x-fingerprint-login-secret": FINGERPRINT_LOGIN_SECRET},
         timeout=10,
     )
+
+
+@app.route("/fingerprint/delete", methods=["POST"])
+def delete_fingerprint():
+    if not is_authorized_admin_request():
+        return jsonify({"error": "Fingerprint service is not authorized"}), 403
+
+    data = request.json or {}
+    user_id = data.get("userId") or data.get("workerId")
+
+    if not user_id:
+        return jsonify({"error": "userId is required"}), 400
+
+    record = get_user_record(user_id)
+    if not record:
+        return jsonify({
+            "success": True,
+            "message": "No fingerprint enrollment found for this account.",
+        }), 200
+
+    try:
+        fp = get_sensor()
+    except Exception as error:
+        return jsonify({"error": str(error)}), 503
+
+    position = record.get("position")
+    deleted_from_sensor = delete_template_if_present(fp, position)
+    remove_stale_position(position)
+    enrolled_identities.pop(user_id, None)
+    save_enrollments()
+
+    print(
+        f"[DELETE] Removed fingerprint enrollment for {record.get('role')} {user_id} "
+        f"at position {position}"
+    )
+
+    return jsonify({
+        "success": True,
+        "message": "Fingerprint enrollment deleted.",
+        "deletedFromSensor": deleted_from_sensor,
+    }), 200
 
 
 @app.route("/fingerprint/enroll", methods=["POST"])
